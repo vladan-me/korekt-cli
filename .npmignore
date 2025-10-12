@@ -1,0 +1,6 @@
+# Exclude development files from NPM package
+vitest.config.mjs
+src/**/*.test.js
+.env
+.env.example
+.idea/

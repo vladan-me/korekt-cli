@@ -1,0 +1,45 @@
+{
+  "name": "vladan-cli",
+  "version": "0.1.0",
+  "description": "An AI-powered code reviewer CLI",
+  "main": "src/index.js",
+  "bin": {
+    "vladan-cli": "./src/index.js"
+  },
+  "type": "module",
+  "scripts": {
+    "test": "vitest",
+    "test:watch": "vitest --watch",
+    "test:coverage": "vitest --coverage"
+  },
+  "keywords": [
+    "code-review",
+    "ai",
+    "cli",
+    "git"
+  ],
+  "author": "Vladan Djokic",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/vladan-me/vladan-cli.git"
+  },
+  "bugs": {
+    "url": "https://github.com/vladan-me/vladan-cli/issues"
+  },
+  "homepage": "https://vladan.ai",
+  "files": [
+    "src"
+  ],
+  "license": "UNLICENSED",
+  "dependencies": {
+    "axios": "^1.12.2",
+    "chalk": "^5.6.2",
+    "commander": "^14.0.1",
+    "conf": "^15.0.2",
+    "dotenv": "^17.2.3",
+    "execa": "^9.6.0"
+  },
+  "devDependencies": {
+    "vitest": "^3.2.4"
+  }
+}
