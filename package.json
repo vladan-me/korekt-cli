@@ -1,6 +1,6 @@
 {
   "name": "vladan-cli",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "An AI-powered code reviewer CLI",
   "main": "src/index.js",
   "bin": {
