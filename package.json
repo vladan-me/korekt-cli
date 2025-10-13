@@ -4,7 +4,7 @@
   "description": "An AI-powered code reviewer CLI",
   "main": "src/index.js",
   "bin": {
-    "vladan-cli": "./src/index.js"
+    "vladan-cli": "src/index.js"
   },
   "type": "module",
   "scripts": {
@@ -21,7 +21,7 @@
   "author": "Vladan Djokic",
   "repository": {
     "type": "git",
-    "url": "https://github.com/vladan-me/vladan-cli.git"
+    "url": "git+https://github.com/vladan-me/vladan-cli.git"
   },
   "bugs": {
     "url": "https://github.com/vladan-me/vladan-cli/issues"
@@ -37,7 +37,8 @@
     "commander": "^14.0.1",
     "conf": "^15.0.2",
     "dotenv": "^17.2.3",
-    "execa": "^9.6.0"
+    "execa": "^9.6.0",
+    "ora": "^9.0.0"
   },
   "devDependencies": {
     "vitest": "^3.2.4"

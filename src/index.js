@@ -4,6 +4,7 @@ import { program } from 'commander';
 import axios from 'axios';
 import chalk from 'chalk';
 import readline from 'readline';
+import ora from 'ora';
 import { runLocalReview } from './git-logic.js';
 import { getApiKey, setApiKey, getApiEndpoint, setApiEndpoint, getTicketSystem, setTicketSystem } from './config.js';
 import { formatReviewOutput } from './formatter.js';
@@ -147,8 +148,16 @@ program
     }
 
     // Step 6: Send the payload to your API
+    const spinner = ora('Submitting review to the AI...').start();
+    const startTime = Date.now();
+
+    // Update spinner with elapsed time every second
+    const timer = setInterval(() => {
+      const elapsed = Math.floor((Date.now() - startTime) / 1000);
+      spinner.text = `Submitting review to the AI... ${elapsed}s`;
+    }, 1000);
+
     try {
-      console.log(chalk.blue('\nSubmitting review to the AI. This may take a moment...'));
       const response = await axios.post(apiEndpoint, payload, {
         headers: {
           'X-API-KEY': apiKey,
@@ -156,9 +165,16 @@ program
         },
       });
 
+      clearInterval(timer);
+      const elapsed = Math.floor((Date.now() - startTime) / 1000);
+      spinner.succeed(`Review completed in ${elapsed}s!`);
+
       // Step 6: Format and display the results beautifully
       formatReviewOutput(response.data);
     } catch (error) {
+      clearInterval(timer);
+      const elapsed = Math.floor((Date.now() - startTime) / 1000);
+      spinner.fail(`Review failed after ${elapsed}s`);
       console.error(chalk.red('\n❌ An error occurred during the API request:'));
       if (error.response) {
         console.error(chalk.red('Status:'), error.response.status);
@@ -286,8 +302,16 @@ async function reviewUncommitted(mode, options) {
     return;
   }
 
+  const spinner = ora('Submitting review to the AI...').start();
+  const startTime = Date.now();
+
+  // Update spinner with elapsed time every second
+  const timer = setInterval(() => {
+    const elapsed = Math.floor((Date.now() - startTime) / 1000);
+    spinner.text = `Submitting review to the AI... ${elapsed}s`;
+  }, 1000);
+
   try {
-    console.log(chalk.blue('\nSubmitting review to the AI. This may take a moment...'));
     const response = await axios.post(apiEndpoint, payload, {
       headers: {
         'X-API-KEY': apiKey,
@@ -295,8 +319,15 @@ async function reviewUncommitted(mode, options) {
       },
     });
 
+    clearInterval(timer);
+    const elapsed = Math.floor((Date.now() - startTime) / 1000);
+    spinner.succeed(`Review completed in ${elapsed}s!`);
+
     formatReviewOutput(response.data);
   } catch (error) {
+    clearInterval(timer);
+    const elapsed = Math.floor((Date.now() - startTime) / 1000);
+    spinner.fail(`Review failed after ${elapsed}s`);
     console.error(chalk.red('\n❌ An error occurred during the API request:'));
     if (error.response) {
       console.error(chalk.red('Status:'), error.response.status);
