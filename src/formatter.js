@@ -1,4 +1,6 @@
 import chalk from 'chalk';
+import path from 'path';
+import { execaSync } from 'execa';
 
 // Emojis and colors inspired by the provided ADO script
 const SEVERITY_ICONS = {
@@ -43,6 +45,33 @@ function formatCategory(category) {
 }
 
 /**
+ * Get the git repository root directory.
+ * @returns {string} - Absolute path to the git repository root
+ */
+function getGitRoot() {
+  try {
+    const { stdout } = execaSync('git', ['rev-parse', '--show-toplevel']);
+    return stdout.trim();
+  } catch (error) {
+    // Fallback to current working directory if not in a git repo
+    return process.cwd();
+  }
+}
+
+/**
+ * Convert a relative file path to an absolute path for better IDE integration.
+ * @param {string} filePath - The file path from the API response
+ * @returns {string} - Absolute file path
+ */
+function toAbsolutePath(filePath) {
+  if (path.isAbsolute(filePath)) {
+    return filePath;
+  }
+  const gitRoot = getGitRoot();
+  return path.join(gitRoot, filePath);
+}
+
+/**
  * Format and display the API response in the new, detailed style.
  * @param {Object} data - The API response data
  */
@@ -57,7 +86,8 @@ export function formatReviewOutput(data) {
     review.praises.forEach(praise => {
       const categoryIcon = CATEGORY_ICONS[praise.category] || CATEGORY_ICONS.default;
       const formattedCategory = formatCategory(praise.category);
-      console.log(`  ✅ ${chalk.green.bold(formattedCategory)} in ${praise.file_path}:${praise.line_number}`);
+      const absolutePath = toAbsolutePath(praise.file_path);
+      console.log(`  ✅ ${chalk.green.bold(formattedCategory)} in ${absolutePath}:${praise.line_number}`);
       console.log(`     ${praise.message}\n`);
     });
   }
@@ -86,11 +116,12 @@ export function formatReviewOutput(data) {
       const severityColor = SEVERITY_COLORS[issue.severity] || chalk.white;
       const categoryIcon = CATEGORY_ICONS[issue.category] || CATEGORY_ICONS.default;
       const formattedCategory = formatCategory(issue.category);
+      const absolutePath = toAbsolutePath(issue.file_path);
 
       console.log(
         `${severityIcon} ${severityColor(
           issue.severity.toUpperCase()
-        )} in ${issue.file_path}:${issue.line_number} (${categoryIcon} ${formattedCategory})`
+        )} in ${absolutePath}:${issue.line_number} (${categoryIcon} ${formattedCategory})`
       );
       console.log(`   ${issue.message}`);
 
