@@ -88,90 +88,6 @@ export function parseNameStatus(output) {
 }
 
 /**
- * Extract Jira ticket IDs (format: PROJ-123)
- * @param {string} text - Text to search
- * @returns {string[]} - Array of ticket IDs found
- */
-export function findJiraTicketIds(text) {
-  const pattern = /([A-Z]+-[0-9]+)/g;
-  const matches = text.matchAll(pattern);
-  return Array.from(matches, (m) => m[1]);
-}
-
-/**
- * Extract Azure DevOps ticket IDs (format: AB#12345 or numeric from branch)
- * @param {string} text - Text to search
- * @param {boolean} isBranch - Whether this is a branch name (use numeric pattern)
- * @returns {string[]} - Array of ticket IDs found
- */
-export function findAdoTicketIds(text, isBranch = false) {
-  if (isBranch) {
-    // For branch names, extract numeric IDs
-    const pattern = /(\d+)/;
-    const match = pattern.exec(text);
-    return match ? [match[1]] : [];
-  } else {
-    // For commit messages, look for AB#<number> pattern
-    const pattern = /AB#(\d+)/gi;
-    const matches = text.matchAll(pattern);
-    return Array.from(matches, (m) => m[1]);
-  }
-}
-
-/**
- * Extract ticket IDs from branch name and commit messages
- * Supports multiple ticket systems: Jira, Azure DevOps
- * @param {string[]} commitMessages - Array of commit messages
- * @param {string} branchName - The branch name
- * @param {string|null} ticketSystem - The ticket system (jira or ado)
- * @returns {string[]} - Array of unique ticket IDs (branch tickets first)
- */
-export function extractTicketIds(commitMessages, branchName, ticketSystem = null) {
-  const orderedTicketIds = [];
-  const foundIds = new Set();
-
-  const normalizedSystem = ticketSystem?.toLowerCase();
-
-  // First, check the branch name
-  if (branchName) {
-    let branchTickets = [];
-
-    if (normalizedSystem === 'jira') {
-      branchTickets = findJiraTicketIds(branchName);
-    } else if (normalizedSystem === 'ado') {
-      branchTickets = findAdoTicketIds(branchName, true);
-    }
-
-    for (const ticketId of branchTickets) {
-      if (!foundIds.has(ticketId)) {
-        orderedTicketIds.push(ticketId);
-        foundIds.add(ticketId);
-      }
-    }
-  }
-
-  // Then, search in commit messages
-  for (const message of commitMessages) {
-    let messageTickets = [];
-
-    if (normalizedSystem === 'jira') {
-      messageTickets = findJiraTicketIds(message);
-    } else if (normalizedSystem === 'ado') {
-      messageTickets = findAdoTicketIds(message, false);
-    }
-
-    for (const ticketId of messageTickets) {
-      if (!foundIds.has(ticketId)) {
-        orderedTicketIds.push(ticketId);
-        foundIds.add(ticketId);
-      }
-    }
-  }
-
-  return orderedTicketIds;
-}
-
-/**
  * Analyze uncommitted changes (staged, unstaged, or all)
  * @param {string} mode - 'staged', 'unstaged', or 'all'
  * @param {string|null} ticketSystem - The ticket system to use (jira or ado), or null to skip ticket extraction
@@ -289,19 +205,12 @@ export async function runUncommittedReview(mode = 'all', ticketSystem = null, in
       return null;
     }
 
-    // 3. Extract ticket IDs from branch name (no commits to check)
-    const ticketIds = extractTicketIds([], branchName, ticketSystem);
-    if (ticketIds.length > 0) {
-      console.log(chalk.gray(`Found ticket IDs: ${ticketIds.join(', ')}`));
-    }
-
-    // 4. Assemble payload
+    // 3. Assemble payload
     return {
       repo_url: normalizeRepoUrl(repoUrl.trim()),
       commit_messages: [], // No commits for uncommitted changes
       changed_files: changedFiles,
       source_branch: branchName,
-      ticket_ids: ticketIds,
     };
   } catch (error) {
     console.error(chalk.red('Failed to analyze uncommitted changes:'), error.message);
@@ -420,19 +329,12 @@ export async function runLocalReview(targetBranch = null, ticketSystem = null) {
       });
     }
 
-    // 5. Extract ticket IDs from branch name and commit messages
-    const ticketIds = extractTicketIds(commitMessages, branchName, ticketSystem);
-    if (ticketIds.length > 0) {
-      console.log(chalk.gray(`Found ticket IDs: ${ticketIds.join(', ')}`));
-    }
-
-    // 6. Assemble the final payload
+    // 5. Assemble the final payload
     return {
       repo_url: normalizeRepoUrl(repoUrl.trim()),
       commit_messages: commitMessages,
       changed_files: changedFiles,
       source_branch: branchName,
-      ticket_ids: ticketIds,
     };
   } catch (error) {
     console.error(chalk.red('Failed to run local review analysis:'), error.message);
