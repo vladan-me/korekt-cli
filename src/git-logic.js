@@ -75,6 +75,10 @@ export function shouldIgnoreFile(filePath, patterns) {
       .replace(/___DOUBLESTAR___/g, '.*')  // Replace ** with .*
       .replace(/\?/g, '.');  // Replace ? with .
 
+    // Handle leading **/ pattern - make it optional so it matches both with and without directory prefix
+    // For example, **/*.sql should match both "file.sql" and "dir/file.sql"
+    regexPattern = regexPattern.replace(/^\.\*\//, '(?:.*/)?');
+
     // Add start and end anchors
     regexPattern = '^' + regexPattern + '$';
 

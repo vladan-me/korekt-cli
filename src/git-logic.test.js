@@ -422,4 +422,14 @@ describe('shouldIgnoreFile', () => {
     expect(shouldIgnoreFile('file', ['*'])).toBe(true);
     expect(shouldIgnoreFile('path/to/file', ['**'])).toBe(true);
   });
+
+  it('should match SQL files with **/*.sql pattern', () => {
+    const pattern = ['**/*.sql'];
+    expect(shouldIgnoreFile('SqlScripts/02_CreateTables.sql', pattern)).toBe(true);
+    expect(shouldIgnoreFile('SqlScripts/03_CreateStoredProcedures.sql', pattern)).toBe(true);
+    expect(shouldIgnoreFile('SqlScripts/20251006000000_CreateDatabase.sql', pattern)).toBe(true);
+    expect(shouldIgnoreFile('db/migrations/001_init.sql', pattern)).toBe(true);
+    expect(shouldIgnoreFile('file.sql', pattern)).toBe(true);
+    expect(shouldIgnoreFile('file.js', pattern)).toBe(false);
+  });
 });
