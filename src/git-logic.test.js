@@ -189,6 +189,100 @@ describe('runUncommittedReview', () => {
   });
 });
 
+describe('runLocalReview - branch fetching', () => {
+  beforeEach(() => {
+    vi.mock('execa');
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('should fail if target branch does not exist locally', async () => {
+    vi.mocked(execa).mockImplementation(async (cmd, args) => {
+      const command = [cmd, ...args].join(' ');
+      if (command.includes('remote get-url origin')) {
+        return { stdout: 'https://github.com/user/repo.git' };
+      }
+      if (command.includes('rev-parse --abbrev-ref HEAD')) {
+        return { stdout: 'current-branch' };
+      }
+      if (command.includes('rev-parse --show-toplevel')) {
+        return { stdout: '/path/to/repo' };
+      }
+      if (command.includes('rev-parse --verify non-existent-branch')) {
+        throw new Error('Branch not found');
+      }
+      // No other commands should be called
+      return { stdout: '' };
+    });
+
+    const result = await runLocalReview('non-existent-branch');
+    expect(result).toBeNull();
+    expect(console.error).toHaveBeenCalledWith(expect.stringContaining("Branch 'non-existent-branch' does not exist locally."));
+  });
+
+  it('should fetch latest changes if target branch exists locally', async () => {
+    vi.mocked(execa).mockImplementation(async (cmd, args) => {
+      const command = [cmd, ...args].join(' ');
+      // Common setup
+      if (command.includes('remote get-url origin')) return { stdout: 'https://github.com/user/repo.git' };
+      if (command.includes('rev-parse --abbrev-ref HEAD')) return { stdout: 'current-branch' };
+      if (command.includes('rev-parse --show-toplevel')) return { stdout: '/path/to/repo' };
+
+      // Branch verification and fetch (successful)
+      if (command.includes('rev-parse --verify main')) return { stdout: 'commit-hash' };
+      if (command === 'git fetch origin main') return { stdout: 'fetch successful' };
+
+      // Rest of the review logic
+      if (command.includes('merge-base origin/main HEAD')) return { stdout: 'abc1234' };
+      if (command.includes('log')) return { stdout: 'feat: message---EOC---' };
+      if (command.includes('diff --name-status')) return { stdout: 'M\tfile.js' };
+      if (command.includes('diff -U15')) return { stdout: 'diff content' };
+      if (command.includes('show')) return { stdout: 'original content' };
+
+      return { stdout: '' };
+    });
+
+    const result = await runLocalReview('main');
+    expect(result).not.toBeNull();
+    const execaCalls = vi.mocked(execa).mock.calls;
+    const fetchCall = execaCalls.find(call => call[0] === 'git' && call[1].includes('fetch'));
+    expect(fetchCall).toBeDefined();
+  });
+
+  it('should warn and continue if fetch fails', async () => {
+    vi.mocked(execa).mockImplementation(async (cmd, args) => {
+      const command = [cmd, ...args].join(' ');
+      if (command.includes('remote get-url origin')) return { stdout: 'https://github.com/user/repo.git' };
+      if (command.includes('rev-parse --abbrev-ref HEAD')) return { stdout: 'current-branch' };
+      if (command.includes('rev-parse --show-toplevel')) return { stdout: '/path/to/repo' };
+      if (command.includes('rev-parse --verify main')) return { stdout: 'commit-hash' };
+
+      // Simulate fetch failure
+      if (command === 'git fetch origin main') {
+        throw new Error('Fetch failed');
+      }
+
+      // Rest of the logic should still run (uses local branch since fetch failed)
+      if (command.includes('merge-base main HEAD')) return { stdout: 'abc1234' };
+      if (command.includes('log')) return { stdout: 'feat: message---EOC---' };
+      if (command.includes('diff --name-status')) return { stdout: 'M\tfile.js' };
+      if (command.includes('diff -U15')) return { stdout: 'diff content' };
+      if (command.includes('show')) return { stdout: 'original content' };
+
+      return { stdout: '' };
+    });
+
+    const result = await runLocalReview('main');
+    expect(result).not.toBeNull(); // Should still proceed
+    expect(console.warn).toHaveBeenCalledWith(expect.stringContaining("Could not fetch remote branch 'origin/main'."));
+    expect(console.warn).toHaveBeenCalledWith(expect.stringContaining("Proceeding with local branch 'main' for comparison."));
+  });
+});
+
 describe('runLocalReview - fork point detection', () => {
   beforeEach(() => {
     vi.mock('execa');
@@ -208,6 +302,9 @@ describe('runLocalReview - fork point detection', () => {
       }
       if (command.includes('rev-parse --abbrev-ref HEAD')) {
         return { stdout: 'feature-branch' };
+      }
+      if (command.includes('rev-parse --show-toplevel')) {
+        return { stdout: '/path/to/repo' };
       }
       if (command.includes('reflog show --no-abbrev-commit feature-branch')) {
         // Simulate reflog output - last line is where branch was created
@@ -252,7 +349,17 @@ describe('runLocalReview - fork point detection', () => {
       if (command.includes('rev-parse --abbrev-ref HEAD')) {
         return { stdout: 'feature-branch' };
       }
-      if (command.includes('merge-base main HEAD')) {
+      if (command.includes('rev-parse --show-toplevel')) {
+        return { stdout: '/path/to/repo' };
+      }
+      // Add mocks for the new branch verification and fetch logic
+      if (command.includes('rev-parse --verify main')) {
+        return { stdout: 'commit-hash' };
+      }
+      if (command === 'git fetch origin main') {
+        return { stdout: '' };
+      }
+      if (command.includes('merge-base origin/main HEAD')) {
         return { stdout: 'abc123' };
       }
       if (command.includes('log --pretty=%B---EOC---')) {
@@ -275,10 +382,10 @@ describe('runLocalReview - fork point detection', () => {
 
     expect(result).toBeDefined();
 
-    // Should have used merge-base with main
+    // Should have used merge-base with origin/main (since fetch succeeded)
     const execaCalls = vi.mocked(execa).mock.calls;
     const mergeBaseCall = execaCalls.find(call =>
-      call[0] === 'git' && call[1].includes('merge-base') && call[1].includes('main')
+      call[0] === 'git' && call[1].includes('merge-base') && call[1].includes('origin/main')
     );
     expect(mergeBaseCall).toBeDefined();
   });

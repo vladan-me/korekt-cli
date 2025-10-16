@@ -270,10 +270,42 @@ export async function runUncommittedReview(mode = 'all', ticketSystem = null, in
  */
 export async function runLocalReview(targetBranch = null, ticketSystem = null, ignorePatterns = null) {
   try {
-    // 1. Get Repo URL and current branch name
+    // 1. Get Repo URL, current branch name, and repository root
     const { stdout: repoUrl } = await execa('git', ['remote', 'get-url', 'origin']);
     const { stdout: sourceBranch } = await execa('git', ['rev-parse', '--abbrev-ref', 'HEAD']);
     const branchName = sourceBranch.trim();
+
+    // Get the repository root directory - we'll run all git commands from there
+    const { stdout: repoRoot } = await execa('git', ['rev-parse', '--show-toplevel']);
+    const repoRootPath = repoRoot.trim();
+
+    // If a branch is provided, check it exists and try to fetch latest remote version
+    let targetBranchRef = targetBranch; // Will be updated to origin/branch if remote exists
+    if (targetBranch) {
+      // Check if the branch exists locally
+      try {
+        await execa('git', ['rev-parse', '--verify', targetBranch]);
+      } catch (error) {
+        console.error(chalk.red(`Branch '${targetBranch}' does not exist locally.`));
+        console.error(chalk.gray(`Please check out the branch first or specify a different one.`));
+        return null;
+      }
+
+      // Try to fetch the latest changes from remote (non-destructive)
+      try {
+        console.log(chalk.gray(`Fetching latest changes for branch '${targetBranch}'...`));
+        await execa('git', ['fetch', 'origin', targetBranch]);
+
+        // If fetch succeeded, use the remote-tracking branch for comparison
+        // This is safer as it doesn't modify the user's local branch
+        targetBranchRef = `origin/${targetBranch}`;
+        console.log(chalk.gray(`Using remote-tracking branch 'origin/${targetBranch}' for comparison.`));
+      } catch (fetchError) {
+        console.warn(chalk.yellow(`Could not fetch remote branch 'origin/${targetBranch}'.`));
+        console.warn(chalk.gray(`Proceeding with local branch '${targetBranch}' for comparison.`));
+        // targetBranchRef stays as targetBranch (local branch)
+      }
+    }
 
     let mergeBase;
 
@@ -303,12 +335,12 @@ export async function runLocalReview(targetBranch = null, ticketSystem = null, i
         return null;
       }
     } else {
-      // 3. Use specified target branch
-      const { stdout: base } = await execa('git', ['merge-base', targetBranch, 'HEAD']);
+      // 3. Use specified target branch (either remote-tracking or local)
+      const { stdout: base } = await execa('git', ['merge-base', targetBranchRef, 'HEAD']);
       mergeBase = base.trim();
       console.log(
         chalk.gray(
-          `Comparing against ${targetBranch} (merge-base: ${mergeBase.substring(0, 7)})...`
+          `Comparing against ${targetBranchRef} (merge-base: ${mergeBase.substring(0, 7)})...`
         )
       );
     }
@@ -317,14 +349,14 @@ export async function runLocalReview(targetBranch = null, ticketSystem = null, i
     console.log(chalk.gray(`Analyzing commits from ${mergeBase.substring(0, 7)} to HEAD...`));
 
     // 3. Get Commit Messages with proper delimiter
-    const { stdout: logOutput } = await execa('git', ['log', '--pretty=%B---EOC---', diffRange]);
+    const { stdout: logOutput } = await execa('git', ['log', '--pretty=%B---EOC---', diffRange], { cwd: repoRootPath });
     const commitMessages = logOutput
       .split('---EOC---')
       .map((msg) => msg.trim())
       .filter(Boolean);
 
     // 4. Get changed files and their status
-    const { stdout: nameStatusOutput } = await execa('git', ['diff', '--name-status', diffRange]);
+    const { stdout: nameStatusOutput } = await execa('git', ['diff', '--name-status', diffRange], { cwd: repoRootPath });
     const fileList = parseNameStatus(nameStatusOutput);
 
     // Filter out ignored files
@@ -349,8 +381,9 @@ export async function runLocalReview(targetBranch = null, ticketSystem = null, i
     for (const file of filteredFileList) {
       const { status, path, oldPath } = file;
 
-      // Get the diff for the file with extended context
-      const { stdout: diff } = await execa('git', ['diff', '-U15', diffRange, '--', path]);
+      // Run git commands from the repository root to handle all file paths correctly
+      // This works regardless of whether we're in a subdirectory or at the repo root
+      const { stdout: diff } = await execa('git', ['diff', '-U15', diffRange, '--', path], { cwd: repoRootPath });
 
       // Get the original content from the base commit
       let content = '';
@@ -360,7 +393,7 @@ export async function runLocalReview(targetBranch = null, ticketSystem = null, i
           const { stdout: originalContent } = await execa('git', [
             'show',
             `${mergeBase.trim()}:${oldPath}`,
-          ]);
+          ], { cwd: repoRootPath });
           content = originalContent;
         } catch (e) {
           // This can happen if a file was added and modified in the same branch
