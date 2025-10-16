@@ -377,6 +377,8 @@ export async function runLocalReview(targetBranch = null, ticketSystem = null, i
       console.log(chalk.gray(`Ignored ${ignoredCount} file(s) based on patterns\n`));
     }
 
+    console.log(chalk.gray(`Collecting diffs for ${filteredFileList.length} file(s)...`));
+
     const changedFiles = [];
     for (const file of filteredFileList) {
       const { status, path, oldPath } = file;
