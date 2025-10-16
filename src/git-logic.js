@@ -53,6 +53,42 @@ export function normalizeRepoUrl(url) {
 }
 
 /**
+ * Check if a file path should be ignored based on patterns
+ * Supports glob patterns like *.lock, dist/*
+ * @param {string} filePath - The file path to check
+ * @param {string[]} patterns - Array of glob patterns to match against
+ * @returns {boolean} - True if the file should be ignored
+ */
+export function shouldIgnoreFile(filePath, patterns) {
+  if (!patterns || patterns.length === 0) {
+    return false;
+  }
+
+  for (const pattern of patterns) {
+    // Convert glob pattern to regex
+    // Replace * with [^/]* (matches anything except /)
+    // Replace ** with .* (matches anything including /)
+    let regexPattern = pattern
+      .replace(/\./g, '\\.')  // Escape dots
+      .replace(/\*\*/g, '___DOUBLESTAR___')  // Temporarily replace **
+      .replace(/\*/g, '[^/]*')  // Replace single * with [^/]*
+      .replace(/___DOUBLESTAR___/g, '.*')  // Replace ** with .*
+      .replace(/\?/g, '.');  // Replace ? with .
+
+    // Add start and end anchors
+    regexPattern = '^' + regexPattern + '$';
+
+    const regex = new RegExp(regexPattern);
+
+    if (regex.test(filePath)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+/**
  * Helper function to parse the complex output of git diff --name-status
  */
 export function parseNameStatus(output) {
@@ -225,9 +261,10 @@ export async function runUncommittedReview(mode = 'all', ticketSystem = null, in
  * Main function to analyze local git changes and prepare review payload
  * @param {string|null} targetBranch - The branch to compare against. If null, uses git reflog to find fork point.
  * @param {string|null} ticketSystem - The ticket system to use (jira or ado), or null to skip ticket extraction
+ * @param {string[]|null} ignorePatterns - Array of glob patterns to ignore files
  * @returns {Object|null} - The payload object ready for API submission, or null on error
  */
-export async function runLocalReview(targetBranch = null, ticketSystem = null) {
+export async function runLocalReview(targetBranch = null, ticketSystem = null, ignorePatterns = null) {
   try {
     // 1. Get Repo URL and current branch name
     const { stdout: repoUrl } = await execa('git', ['remote', 'get-url', 'origin']);
@@ -286,8 +323,26 @@ export async function runLocalReview(targetBranch = null, ticketSystem = null) {
     const { stdout: nameStatusOutput } = await execa('git', ['diff', '--name-status', diffRange]);
     const fileList = parseNameStatus(nameStatusOutput);
 
+    // Filter out ignored files
+    let filteredFileList = fileList;
+    let ignoredCount = 0;
+    if (ignorePatterns && ignorePatterns.length > 0) {
+      filteredFileList = fileList.filter(file => {
+        const ignored = shouldIgnoreFile(file.path, ignorePatterns);
+        if (ignored) {
+          ignoredCount++;
+          console.log(chalk.gray(`  Ignoring: ${file.path}`));
+        }
+        return !ignored;
+      });
+    }
+
+    if (ignoredCount > 0) {
+      console.log(chalk.gray(`Ignored ${ignoredCount} file(s) based on patterns\n`));
+    }
+
     const changedFiles = [];
-    for (const file of fileList) {
+    for (const file of filteredFileList) {
       const { status, path, oldPath } = file;
 
       // Get the diff for the file with extended context

@@ -55,6 +55,7 @@ program
   .argument('[target-branch]', 'The branch to compare against (e.g., main, develop). If not specified, auto-detects fork point.')
   .option('--ticket-system <system>', 'Ticket system to use (jira or ado)')
   .option('--dry-run', 'Show payload without sending to API')
+  .option('--ignore <patterns...>', 'Ignore files matching these patterns (e.g., "*.lock" "dist/*")')
   .action(async (targetBranch, options) => {
     const reviewTarget = targetBranch ? `against '${targetBranch}'` : '(auto-detecting fork point)';
     console.log(chalk.blue.bold(`🚀 Starting AI Code Review ${reviewTarget}...`));
@@ -86,7 +87,7 @@ program
     }
 
     // Step 2: Gather all data using our git logic module
-    const payload = await runLocalReview(targetBranch, ticketSystem);
+    const payload = await runLocalReview(targetBranch, ticketSystem, options.ignore);
 
     if (!payload) {
       console.error(chalk.red('Could not proceed with review due to errors during analysis.'));

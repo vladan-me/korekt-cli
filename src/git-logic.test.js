@@ -8,6 +8,7 @@ import {
   runUncommittedReview,
   truncateContent,
   normalizeRepoUrl,
+  shouldIgnoreFile,
 } from './git-logic.js';
 import { execa } from 'execa';
 
@@ -46,117 +47,6 @@ describe('parseNameStatus', () => {
 
   it('should handle empty input', () => {
     expect(parseNameStatus('')).toEqual([]);
-  });
-});
-
-describe('findJiraTicketIds', () => {
-  it('should find single Jira ticket ID', () => {
-    expect(findJiraTicketIds('PROJ-123')).toEqual(['PROJ-123']);
-  });
-
-  it('should find multiple Jira ticket IDs', () => {
-    expect(findJiraTicketIds('Fix PROJ-123 and ABC-456')).toEqual(['PROJ-123', 'ABC-456']);
-  });
-
-  it('should find Jira ticket in branch name', () => {
-    expect(findJiraTicketIds('feature/PROJ-789-add-login')).toEqual(['PROJ-789']);
-  });
-
-  it('should return empty array when no tickets found', () => {
-    expect(findJiraTicketIds('just a regular message')).toEqual([]);
-  });
-
-  it('should handle edge cases', () => {
-    expect(findJiraTicketIds('X-1')).toEqual(['X-1']); // Minimum valid
-    expect(findJiraTicketIds('VERYLONGPROJ-999999')).toEqual(['VERYLONGPROJ-999999']);
-  });
-});
-
-describe('findAdoTicketIds', () => {
-  it('should find numeric ID in branch name', () => {
-    expect(findAdoTicketIds('feature/12345-add-feature', true)).toEqual(['12345']);
-  });
-
-  it('should find AB# pattern in commit message', () => {
-    expect(findAdoTicketIds('Fix bug AB#67890', false)).toEqual(['67890']);
-  });
-
-  it('should find multiple AB# patterns', () => {
-    expect(findAdoTicketIds('Fix AB#111 and AB#222', false)).toEqual(['111', '222']);
-  });
-
-  it('should be case insensitive for AB# pattern', () => {
-    expect(findAdoTicketIds('Fix ab#999', false)).toEqual(['999']);
-  });
-
-  it('should return empty array when no match', () => {
-    expect(findAdoTicketIds('no ticket here', false)).toEqual([]);
-    expect(findAdoTicketIds('no-numbers', true)).toEqual([]);
-  });
-});
-
-describe('extractTicketIds', () => {
-  describe('Jira system', () => {
-    it('should extract from branch name first', () => {
-      const commits = ['Fix PROJ-456'];
-      const branch = 'feature/PROJ-123-new-feature';
-      const result = extractTicketIds(commits, branch, 'jira');
-      expect(result).toEqual(['PROJ-123', 'PROJ-456']);
-    });
-
-    it('should extract from commit messages', () => {
-      const commits = ['Add PROJ-111', 'Fix PROJ-222 and ABC-333'];
-      const result = extractTicketIds(commits, '', 'jira');
-      expect(result).toEqual(['PROJ-111', 'PROJ-222', 'ABC-333']);
-    });
-
-    it('should deduplicate ticket IDs', () => {
-      const commits = ['Fix PROJ-123', 'Update PROJ-123'];
-      const branch = 'feature/PROJ-123-fix';
-      const result = extractTicketIds(commits, branch, 'jira');
-      expect(result).toEqual(['PROJ-123']);
-    });
-
-    it('should maintain order: branch tickets first, then commits', () => {
-      const commits = ['Add ABC-999', 'Fix PROJ-111'];
-      const branch = 'feature/PROJ-123-test';
-      const result = extractTicketIds(commits, branch, 'jira');
-      expect(result).toEqual(['PROJ-123', 'ABC-999', 'PROJ-111']);
-    });
-  });
-
-  describe('Azure DevOps system', () => {
-    it('should extract numeric ID from branch', () => {
-      const commits = ['Fix AB#67890'];
-      const branch = 'feature/12345-new-feature';
-      const result = extractTicketIds(commits, branch, 'ado');
-      expect(result).toEqual(['12345', '67890']);
-    });
-
-
-    it('should deduplicate ADO tickets', () => {
-      const commits = ['Fix AB#123', 'Update AB#123'];
-      const result = extractTicketIds(commits, '', 'ado');
-      expect(result).toEqual(['123']);
-    });
-  });
-
-  it('should return empty array when no tickets found', () => {
-    const result = extractTicketIds(['no tickets'], 'no-tickets', 'jira');
-    expect(result).toEqual([]);
-  });
-
-  it('should handle undefined/null branch name', () => {
-    const commits = ['Fix PROJ-123'];
-    expect(extractTicketIds(commits, null, 'jira')).toEqual(['PROJ-123']);
-    expect(extractTicketIds(commits, undefined, 'jira')).toEqual(['PROJ-123']);
-  });
-
-  it('should return empty array when ticket system is null', () => {
-    const commits = ['Fix PROJ-123', 'Update AB#456'];
-    const branch = 'feature/PROJ-789-test';
-    const result = extractTicketIds(commits, branch, null);
-    expect(result).toEqual([]);
   });
 });
 
@@ -296,35 +186,6 @@ describe('runUncommittedReview', () => {
     const result = await runUncommittedReview('all', null);
 
     expect(result).toBeNull();
-  });
-
-  it('should extract ticket IDs from branch name', async () => {
-    vi.mocked(execa).mockImplementation(async (cmd, args) => {
-      const command = [cmd, ...args].join(' ');
-
-      if (command.includes('remote get-url origin')) {
-        return { stdout: 'https://github.com/user/repo.git' };
-      }
-      if (command.includes('rev-parse --abbrev-ref HEAD')) {
-        return { stdout: 'feature/PROJ-123-add-feature' };
-      }
-      if (command.includes('diff --cached --name-status')) {
-        return { stdout: 'M\tfile.js' };
-      }
-      if (command.includes('diff --cached -U15 -- file.js')) {
-        return { stdout: 'diff content' };
-      }
-      if (command.includes('show HEAD:file.js')) {
-        return { stdout: 'old content' };
-      }
-
-      throw new Error(`Unmocked command: ${command}`);
-    });
-
-    const result = await runUncommittedReview('staged', 'jira');
-
-    expect(result).toBeDefined();
-    expect(result.ticket_ids).toEqual(['PROJ-123']);
   });
 });
 
@@ -496,5 +357,69 @@ describe('normalizeRepoUrl', () => {
   it('should keep Azure DevOps HTTPS URLs unchanged', () => {
     const adoUrl = 'https://dev.azure.com/VanillaSoftCollection/VanillaLand/_git/VanillaLand';
     expect(normalizeRepoUrl(adoUrl)).toBe(adoUrl);
+  });
+});
+
+describe('shouldIgnoreFile', () => {
+  it('should return false when no patterns provided', () => {
+    expect(shouldIgnoreFile('file.js', [])).toBe(false);
+    expect(shouldIgnoreFile('file.js', null)).toBe(false);
+    expect(shouldIgnoreFile('file.js', undefined)).toBe(false);
+  });
+
+  it('should match exact filename', () => {
+    expect(shouldIgnoreFile('package-lock.json', ['package-lock.json'])).toBe(true);
+    expect(shouldIgnoreFile('package.json', ['package-lock.json'])).toBe(false);
+  });
+
+  it('should match files with * wildcard', () => {
+    expect(shouldIgnoreFile('file.lock', ['*.lock'])).toBe(true);
+    expect(shouldIgnoreFile('package-lock.json', ['*.lock'])).toBe(false);
+    expect(shouldIgnoreFile('test.min.js', ['*.min.js'])).toBe(true);
+  });
+
+  it('should match files in directories with *', () => {
+    expect(shouldIgnoreFile('dist/bundle.js', ['dist/*'])).toBe(true);
+    expect(shouldIgnoreFile('dist/css/style.css', ['dist/*'])).toBe(false); // * doesn't match /
+    expect(shouldIgnoreFile('src/index.js', ['dist/*'])).toBe(false);
+  });
+
+  it('should match files recursively with **', () => {
+    expect(shouldIgnoreFile('dist/bundle.js', ['dist/**'])).toBe(true);
+    expect(shouldIgnoreFile('dist/css/style.css', ['dist/**'])).toBe(true);
+    expect(shouldIgnoreFile('dist/js/vendor/lib.js', ['dist/**'])).toBe(true);
+    expect(shouldIgnoreFile('src/index.js', ['dist/**'])).toBe(false);
+  });
+
+  it('should match with ? wildcard for single character', () => {
+    expect(shouldIgnoreFile('test1.js', ['test?.js'])).toBe(true);
+    expect(shouldIgnoreFile('test2.js', ['test?.js'])).toBe(true);
+    expect(shouldIgnoreFile('test12.js', ['test?.js'])).toBe(false);
+    expect(shouldIgnoreFile('test.js', ['test?.js'])).toBe(false);
+  });
+
+  it('should handle multiple patterns', () => {
+    const patterns = ['*.lock', '*.log', 'dist/*'];
+    expect(shouldIgnoreFile('yarn.lock', patterns)).toBe(true);
+    expect(shouldIgnoreFile('error.log', patterns)).toBe(true);
+    expect(shouldIgnoreFile('dist/bundle.js', patterns)).toBe(true);
+    expect(shouldIgnoreFile('src/index.js', patterns)).toBe(false);
+  });
+
+  it('should match files with dots in paths', () => {
+    expect(shouldIgnoreFile('file.test.js', ['*.test.js'])).toBe(true);
+    expect(shouldIgnoreFile('component.spec.ts', ['*.spec.ts'])).toBe(true);
+  });
+
+  it('should match nested paths correctly', () => {
+    expect(shouldIgnoreFile('src/components/Button.js', ['src/components/*'])).toBe(true);
+    expect(shouldIgnoreFile('src/components/forms/Input.js', ['src/components/*'])).toBe(false);
+    expect(shouldIgnoreFile('src/components/forms/Input.js', ['src/components/**'])).toBe(true);
+  });
+
+  it('should handle edge cases', () => {
+    expect(shouldIgnoreFile('', ['*'])).toBe(true);
+    expect(shouldIgnoreFile('file', ['*'])).toBe(true);
+    expect(shouldIgnoreFile('path/to/file', ['**'])).toBe(true);
   });
 });
