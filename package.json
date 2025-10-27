@@ -1,10 +1,11 @@
 {
-  "name": "vladan-cli",
-   "version": "0.1.3",
-  "description": "An AI-powered code reviewer CLI",
+  "name": "korekt-cli",
+  "version": "0.2.0",
+  "description": "AI-powered code review CLI - Keep your kode korekt",
   "main": "src/index.js",
   "bin": {
-    "vladan-cli": "src/index.js"
+    "kk": "src/index.js",
+    "korekt": "src/index.js"
   },
   "type": "module",
   "scripts": {
@@ -16,21 +17,24 @@
     "code-review",
     "ai",
     "cli",
-    "git"
+    "git",
+    "korekt",
+    "code-quality",
+    "static-analysis"
   ],
   "author": "Vladan Djokic",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/vladan-me/vladan-cli.git"
+    "url": "git+https://github.com/vladan-me/korekt-cli.git"
   },
   "bugs": {
-    "url": "https://github.com/vladan-me/vladan-cli/issues"
+    "url": "https://github.com/vladan-me/korekt-cli/issues"
   },
-  "homepage": "https://vladan.ai",
+  "homepage": "https://korekt.ai",
   "files": [
     "src"
   ],
-  "license": "UNLICENSED",
+  "license": "MIT",
   "dependencies": {
     "axios": "^1.12.2",
     "chalk": "^5.6.2",

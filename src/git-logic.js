@@ -331,7 +331,7 @@ export async function runLocalReview(targetBranch = null, ticketSystem = null, i
         }
       } catch (error) {
         console.error(chalk.red('Could not auto-detect fork point. Please specify a target branch.'));
-        console.error(chalk.gray('Usage: vladan-cli review <target-branch>'));
+        console.error(chalk.gray('Usage: kk review <target-branch>'));
         return null;
       }
     } else {
