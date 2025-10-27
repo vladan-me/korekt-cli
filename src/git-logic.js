@@ -28,21 +28,21 @@ export function truncateContent(content, maxLines = 2000) {
  */
 export function normalizeRepoUrl(url) {
   // Handle Azure DevOps SSH format: git@ssh.dev.azure.com:v3/org/project/repo
-  const azureDevOpsSshMatch = url.match(/git@ssh\.dev\.azure\.com:v3\/([^\/]+)\/([^\/]+)\/(.+)/);
+  const azureDevOpsSshMatch = url.match(/git@ssh\.dev\.azure\.com:v3\/([^/]+)\/([^/]+)\/(.+)/);
   if (azureDevOpsSshMatch) {
     const [, org, project, repo] = azureDevOpsSshMatch;
     return `https://dev.azure.com/${org}/${project}/_git/${repo}`;
   }
 
   // Handle GitHub SSH format: git@github.com:user/repo.git
-  const githubSshMatch = url.match(/git@github\.com:([^\/]+)\/(.+?)(?:\.git)?$/);
+  const githubSshMatch = url.match(/git@github\.com:([^/]+)\/(.+?)(?:\.git)?$/);
   if (githubSshMatch) {
     const [, user, repo] = githubSshMatch;
     return `https://github.com/${user}/${repo}`;
   }
 
   // Handle GitLab SSH format: git@gitlab.com:user/repo.git
-  const gitlabSshMatch = url.match(/git@gitlab\.com:([^\/]+)\/(.+?)(?:\.git)?$/);
+  const gitlabSshMatch = url.match(/git@gitlab\.com:([^/]+)\/(.+?)(?:\.git)?$/);
   if (gitlabSshMatch) {
     const [, user, repo] = gitlabSshMatch;
     return `https://gitlab.com/${user}/${repo}`;
@@ -69,11 +69,11 @@ export function shouldIgnoreFile(filePath, patterns) {
     // Replace * with [^/]* (matches anything except /)
     // Replace ** with .* (matches anything including /)
     let regexPattern = pattern
-      .replace(/\./g, '\\.')  // Escape dots
-      .replace(/\*\*/g, '___DOUBLESTAR___')  // Temporarily replace **
-      .replace(/\*/g, '[^/]*')  // Replace single * with [^/]*
-      .replace(/___DOUBLESTAR___/g, '.*')  // Replace ** with .*
-      .replace(/\?/g, '.');  // Replace ? with .
+      .replace(/\./g, '\\.') // Escape dots
+      .replace(/\*\*/g, '___DOUBLESTAR___') // Temporarily replace **
+      .replace(/\*/g, '[^/]*') // Replace single * with [^/]*
+      .replace(/___DOUBLESTAR___/g, '.*') // Replace ** with .*
+      .replace(/\?/g, '.'); // Replace ? with .
 
     // Handle leading **/ pattern - make it optional so it matches both with and without directory prefix
     // For example, **/*.sql should match both "file.sql" and "dir/file.sql"
@@ -133,7 +133,11 @@ export function parseNameStatus(output) {
  * @param {string|null} ticketSystem - The ticket system to use (jira or ado), or null to skip ticket extraction
  * @returns {Object|null} - The payload object ready for API submission, or null on error
  */
-export async function runUncommittedReview(mode = 'all', ticketSystem = null, includeUntracked = false) {
+export async function runUncommittedReview(
+  mode = 'all',
+  _ticketSystem = null,
+  includeUntracked = false
+) {
   try {
     // 1. Get Repo URL and current branch name
     const { stdout: repoUrl } = await execa('git', ['remote', 'get-url', 'origin']);
@@ -164,12 +168,19 @@ export async function runUncommittedReview(mode = 'all', ticketSystem = null, in
     // Handle untracked files if requested
     if (includeUntracked) {
       console.log(chalk.gray('Analyzing untracked files...'));
-      const { stdout: untrackedFilesOutput } = await execa('git', ['ls-files', '--others', '--exclude-standard']);
+      const { stdout: untrackedFilesOutput } = await execa('git', [
+        'ls-files',
+        '--others',
+        '--exclude-standard',
+      ]);
       const untrackedFiles = untrackedFilesOutput.split('\n').filter(Boolean);
 
       for (const file of untrackedFiles) {
         const content = fs.readFileSync(file, 'utf-8');
-        const diff = content.split('\n').map(line => `+${line}`).join('\n');
+        const diff = content
+          .split('\n')
+          .map((line) => `+${line}`)
+          .join('\n');
         changedFiles.push({
           path: file,
           status: 'A', // Untracked files are always additions
@@ -182,8 +193,8 @@ export async function runUncommittedReview(mode = 'all', ticketSystem = null, in
     }
 
     // Deduplicate file list before processing diffs
-    const processedPaths = new Set(changedFiles.map(f => f.path));
-    const uniqueFileList = fileList.filter(file => !processedPaths.has(file.path));
+    const processedPaths = new Set(changedFiles.map((f) => f.path));
+    const uniqueFileList = fileList.filter((file) => !processedPaths.has(file.path));
 
     for (const file of uniqueFileList) {
       const { status, path, oldPath } = file;
@@ -199,7 +210,13 @@ export async function runUncommittedReview(mode = 'all', ticketSystem = null, in
       } else {
         // For 'all', try staged first, then unstaged
         try {
-          const { stdout: stagedDiff } = await execa('git', ['diff', '--cached', '-U15', '--', path]);
+          const { stdout: stagedDiff } = await execa('git', [
+            'diff',
+            '--cached',
+            '-U15',
+            '--',
+            path,
+          ]);
           if (stagedDiff) {
             diff = stagedDiff;
           } else {
@@ -218,8 +235,10 @@ export async function runUncommittedReview(mode = 'all', ticketSystem = null, in
         try {
           const { stdout: headContent } = await execa('git', ['show', `HEAD:${oldPath}`]);
           content = headContent;
-        } catch (e) {
-          console.warn(chalk.yellow(`Could not get HEAD content for ${oldPath}. Assuming it's new.`));
+        } catch {
+          console.warn(
+            chalk.yellow(`Could not get HEAD content for ${oldPath}. Assuming it's new.`)
+          );
         }
       }
 
@@ -268,7 +287,11 @@ export async function runUncommittedReview(mode = 'all', ticketSystem = null, in
  * @param {string[]|null} ignorePatterns - Array of glob patterns to ignore files
  * @returns {Object|null} - The payload object ready for API submission, or null on error
  */
-export async function runLocalReview(targetBranch = null, ticketSystem = null, ignorePatterns = null) {
+export async function runLocalReview(
+  targetBranch = null,
+  _ticketSystem = null,
+  ignorePatterns = null
+) {
   try {
     // 1. Get Repo URL, current branch name, and repository root
     const { stdout: repoUrl } = await execa('git', ['remote', 'get-url', 'origin']);
@@ -285,7 +308,7 @@ export async function runLocalReview(targetBranch = null, ticketSystem = null, i
       // Check if the branch exists locally
       try {
         await execa('git', ['rev-parse', '--verify', targetBranch]);
-      } catch (error) {
+      } catch {
         console.error(chalk.red(`Branch '${targetBranch}' does not exist locally.`));
         console.error(chalk.gray(`Please check out the branch first or specify a different one.`));
         return null;
@@ -299,8 +322,10 @@ export async function runLocalReview(targetBranch = null, ticketSystem = null, i
         // If fetch succeeded, use the remote-tracking branch for comparison
         // This is safer as it doesn't modify the user's local branch
         targetBranchRef = `origin/${targetBranch}`;
-        console.log(chalk.gray(`Using remote-tracking branch 'origin/${targetBranch}' for comparison.`));
-      } catch (fetchError) {
+        console.log(
+          chalk.gray(`Using remote-tracking branch 'origin/${targetBranch}' for comparison.`)
+        );
+      } catch {
         console.warn(chalk.yellow(`Could not fetch remote branch 'origin/${targetBranch}'.`));
         console.warn(chalk.gray(`Proceeding with local branch '${targetBranch}' for comparison.`));
         // targetBranchRef stays as targetBranch (local branch)
@@ -313,7 +338,12 @@ export async function runLocalReview(targetBranch = null, ticketSystem = null, i
     if (!targetBranch) {
       try {
         // Use git reflog to find where the branch was created
-        const { stdout: reflog } = await execa('git', ['reflog', 'show', '--no-abbrev-commit', branchName]);
+        const { stdout: reflog } = await execa('git', [
+          'reflog',
+          'show',
+          '--no-abbrev-commit',
+          branchName,
+        ]);
         const lines = reflog.split('\n');
 
         // Look for the branch creation point (last line in reflog)
@@ -322,15 +352,19 @@ export async function runLocalReview(targetBranch = null, ticketSystem = null, i
           const match = creationLine.match(/^([a-f0-9]{40})/);
           if (match) {
             mergeBase = match[1];
-            console.log(chalk.gray(`Auto-detected fork point from reflog: ${mergeBase.substring(0, 7)}`));
+            console.log(
+              chalk.gray(`Auto-detected fork point from reflog: ${mergeBase.substring(0, 7)}`)
+            );
           }
         }
 
         if (!mergeBase) {
           throw new Error('Could not find fork point in reflog');
         }
-      } catch (error) {
-        console.error(chalk.red('Could not auto-detect fork point. Please specify a target branch.'));
+      } catch {
+        console.error(
+          chalk.red('Could not auto-detect fork point. Please specify a target branch.')
+        );
         console.error(chalk.gray('Usage: kk review <target-branch>'));
         return null;
       }
@@ -349,21 +383,25 @@ export async function runLocalReview(targetBranch = null, ticketSystem = null, i
     console.log(chalk.gray(`Analyzing commits from ${mergeBase.substring(0, 7)} to HEAD...`));
 
     // 3. Get Commit Messages with proper delimiter
-    const { stdout: logOutput } = await execa('git', ['log', '--pretty=%B---EOC---', diffRange], { cwd: repoRootPath });
+    const { stdout: logOutput } = await execa('git', ['log', '--pretty=%B---EOC---', diffRange], {
+      cwd: repoRootPath,
+    });
     const commitMessages = logOutput
       .split('---EOC---')
       .map((msg) => msg.trim())
       .filter(Boolean);
 
     // 4. Get changed files and their status
-    const { stdout: nameStatusOutput } = await execa('git', ['diff', '--name-status', diffRange], { cwd: repoRootPath });
+    const { stdout: nameStatusOutput } = await execa('git', ['diff', '--name-status', diffRange], {
+      cwd: repoRootPath,
+    });
     const fileList = parseNameStatus(nameStatusOutput);
 
     // Filter out ignored files
     let filteredFileList = fileList;
     let ignoredCount = 0;
     if (ignorePatterns && ignorePatterns.length > 0) {
-      filteredFileList = fileList.filter(file => {
+      filteredFileList = fileList.filter((file) => {
         const ignored = shouldIgnoreFile(file.path, ignorePatterns);
         if (ignored) {
           ignoredCount++;
@@ -385,19 +423,22 @@ export async function runLocalReview(targetBranch = null, ticketSystem = null, i
 
       // Run git commands from the repository root to handle all file paths correctly
       // This works regardless of whether we're in a subdirectory or at the repo root
-      const { stdout: diff } = await execa('git', ['diff', '-U15', diffRange, '--', path], { cwd: repoRootPath });
+      const { stdout: diff } = await execa('git', ['diff', '-U15', diffRange, '--', path], {
+        cwd: repoRootPath,
+      });
 
       // Get the original content from the base commit
       let content = '';
       if (status !== 'A') {
         // Added files have no original content
         try {
-          const { stdout: originalContent } = await execa('git', [
-            'show',
-            `${mergeBase.trim()}:${oldPath}`,
-          ], { cwd: repoRootPath });
+          const { stdout: originalContent } = await execa(
+            'git',
+            ['show', `${mergeBase.trim()}:${oldPath}`],
+            { cwd: repoRootPath }
+          );
           content = originalContent;
-        } catch (e) {
+        } catch {
           // This can happen if a file was added and modified in the same branch
           console.warn(
             chalk.yellow(`Could not get original content for ${oldPath}. Assuming it was added.`)

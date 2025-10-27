@@ -39,9 +39,7 @@ const CATEGORY_ICONS = {
  */
 function formatCategory(category) {
   if (!category) return '';
-  return category
-    .replace(/_/g, ' ')
-    .replace(/\b\w/g, char => char.toUpperCase());
+  return category.replace(/_/g, ' ').replace(/\b\w/g, (char) => char.toUpperCase());
 }
 
 /**
@@ -52,7 +50,7 @@ function getGitRoot() {
   try {
     const { stdout } = execaSync('git', ['rev-parse', '--show-toplevel']);
     return stdout.trim();
-  } catch (error) {
+  } catch {
     // Fallback to current working directory if not in a git repo
     return process.cwd();
   }
@@ -83,11 +81,12 @@ export function formatReviewOutput(data) {
   // --- Praises Section ---
   if (review && review.praises && review.praises.length > 0) {
     console.log(chalk.bold.magenta(`✨ Praises (${summary.total_praises})`));
-    review.praises.forEach(praise => {
-      const categoryIcon = CATEGORY_ICONS[praise.category] || CATEGORY_ICONS.default;
+    review.praises.forEach((praise) => {
       const formattedCategory = formatCategory(praise.category);
       const absolutePath = toAbsolutePath(praise.file_path);
-      console.log(`  ✅ ${chalk.green.bold(formattedCategory)} in ${absolutePath}:${praise.line_number}`);
+      console.log(
+        `  ✅ ${chalk.green.bold(formattedCategory)} in ${absolutePath}:${praise.line_number}`
+      );
       console.log(`     ${praise.message}\n`);
     });
   }
@@ -99,7 +98,7 @@ export function formatReviewOutput(data) {
     // Severity Summary Table
     console.log(chalk.underline('Severity Count:'));
     const severities = ['critical', 'high', 'medium', 'low'];
-    severities.forEach(severity => {
+    severities.forEach((severity) => {
       const count = summary[severity] || 0;
       if (count > 0) {
         const icon = SEVERITY_ICONS[severity];
@@ -128,7 +127,10 @@ export function formatReviewOutput(data) {
       if (issue.suggested_fix) {
         console.log(chalk.bold('\n💡 Suggested Fix:'));
         // Indent the suggested fix for readability
-        const indentedFix = issue.suggested_fix.split('\n').map(line => `   ${line}`).join('\n');
+        const indentedFix = issue.suggested_fix
+          .split('\n')
+          .map((line) => `   ${line}`)
+          .join('\n');
         console.log(chalk.green(indentedFix));
       }
 

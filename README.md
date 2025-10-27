@@ -4,7 +4,7 @@
 [![npm downloads](https://img.shields.io/npm/dm/korekt-cli.svg)](https://www.npmjs.com/package/korekt-cli)
 [![license](https://img.shields.io/npm/l/korekt-cli.svg)](https://www.npmjs.com/package/korekt-cli)
 
-AI-powered code review CLI - Keep your kode korekt ✨
+AI-powered code review CLI - Keep your kode korekt
 
 `kk` integrates seamlessly with your local Git workflow to provide intelligent code reviews powered by AI.
 

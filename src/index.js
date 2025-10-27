@@ -6,7 +6,14 @@ import chalk from 'chalk';
 import readline from 'readline';
 import ora from 'ora';
 import { runLocalReview } from './git-logic.js';
-import { getApiKey, setApiKey, getApiEndpoint, setApiEndpoint, getTicketSystem, setTicketSystem } from './config.js';
+import {
+  getApiKey,
+  setApiKey,
+  getApiEndpoint,
+  setApiEndpoint,
+  getTicketSystem,
+  setTicketSystem,
+} from './config.js';
 import { formatReviewOutput } from './formatter.js';
 
 /**
@@ -31,7 +38,9 @@ program
   .name('kk')
   .description('AI-powered code review CLI - Keep your kode korekt')
   .version('0.2.0')
-  .addHelpText('after', `
+  .addHelpText(
+    'after',
+    `
 Examples:
   $ kk review                      Review committed changes (auto-detect base)
   $ kk review main                 Review changes against main branch
@@ -47,24 +56,29 @@ Configuration:
   $ kk config --key YOUR_KEY
   $ kk config --endpoint https://api.korekt.ai/review/local
   $ kk config --ticket-system ado
-`);
+`
+  );
 
 program
   .command('review')
   .description('Review the changes in the current branch.')
-  .argument('[target-branch]', 'The branch to compare against (e.g., main, develop). If not specified, auto-detects fork point.')
+  .argument(
+    '[target-branch]',
+    'The branch to compare against (e.g., main, develop). If not specified, auto-detects fork point.'
+  )
   .option('--ticket-system <system>', 'Ticket system to use (jira or ado)')
   .option('--dry-run', 'Show payload without sending to API')
-  .option('--ignore <patterns...>', 'Ignore files matching these patterns (e.g., "*.lock" "dist/*")')
+  .option(
+    '--ignore <patterns...>',
+    'Ignore files matching these patterns (e.g., "*.lock" "dist/*")'
+  )
   .action(async (targetBranch, options) => {
     const reviewTarget = targetBranch ? `against '${targetBranch}'` : '(auto-detecting fork point)';
     console.log(chalk.blue.bold(`🚀 Starting AI Code Review ${reviewTarget}...`));
 
     const apiKey = getApiKey();
     if (!apiKey) {
-      console.error(
-        chalk.red('API Key not found! Please run `kk config --key YOUR_KEY` first.')
-      );
+      console.error(chalk.red('API Key not found! Please run `kk config --key YOUR_KEY` first.'));
       return;
     }
 
@@ -107,12 +121,18 @@ program
       // Create a shortened version for display
       const displayPayload = {
         ...payload,
-        changed_files: payload.changed_files.map(file => ({
+        changed_files: payload.changed_files.map((file) => ({
           path: file.path,
           status: file.status,
           ...(file.old_path && { old_path: file.old_path }),
-          diff: file.diff.length > 500 ? `${file.diff.substring(0, 500)}... [truncated ${file.diff.length - 500} chars]` : file.diff,
-          content: file.content.length > 500 ? `${file.content.substring(0, 500)}... [truncated ${file.content.length - 500} chars]` : file.content,
+          diff:
+            file.diff.length > 500
+              ? `${file.diff.substring(0, 500)}... [truncated ${file.diff.length - 500} chars]`
+              : file.diff,
+          content:
+            file.content.length > 500
+              ? `${file.content.substring(0, 500)}... [truncated ${file.content.length - 500} chars]`
+              : file.content,
         })),
       };
 
@@ -129,14 +149,15 @@ program
     console.log(`  Files: ${chalk.cyan(payload.changed_files.length)}\n`);
 
     console.log(chalk.bold('  Files to review:'));
-    payload.changed_files.forEach(file => {
-      const statusColor = {
-        'M': chalk.yellow,
-        'A': chalk.green,
-        'D': chalk.red,
-        'R': chalk.blue,
-        'C': chalk.cyan,
-      }[file.status] || (text => text);
+    payload.changed_files.forEach((file) => {
+      const statusColor =
+        {
+          M: chalk.yellow,
+          A: chalk.green,
+          D: chalk.red,
+          R: chalk.blue,
+          C: chalk.cyan,
+        }[file.status] || ((text) => text);
       console.log(`    ${statusColor(file.status + ' ' + file.path)}`);
     });
     console.log();
@@ -161,7 +182,7 @@ program
     try {
       const response = await axios.post(apiEndpoint, payload, {
         headers: {
-          'Authorization': `Bearer ${apiKey}`,
+          Authorization: `Bearer ${apiKey}`,
           'Content-Type': 'application/json',
         },
       });
@@ -224,9 +245,7 @@ program
 async function reviewUncommitted(mode, options) {
   const apiKey = getApiKey();
   if (!apiKey) {
-    console.error(
-      chalk.red('API Key not found! Please run `kk config --key YOUR_KEY` first.')
-    );
+    console.error(chalk.red('API Key not found! Please run `kk config --key YOUR_KEY` first.'));
     return;
   }
 
@@ -265,12 +284,18 @@ async function reviewUncommitted(mode, options) {
 
     const displayPayload = {
       ...payload,
-      changed_files: payload.changed_files.map(file => ({
+      changed_files: payload.changed_files.map((file) => ({
         path: file.path,
         status: file.status,
         ...(file.old_path && { old_path: file.old_path }),
-        diff: file.diff.length > 500 ? `${file.diff.substring(0, 500)}... [truncated ${file.diff.length - 500} chars]` : file.diff,
-        content: file.content.length > 500 ? `${file.content.substring(0, 500)}... [truncated ${file.content.length - 500} chars]` : file.content,
+        diff:
+          file.diff.length > 500
+            ? `${file.diff.substring(0, 500)}... [truncated ${file.diff.length - 500} chars]`
+            : file.diff,
+        content:
+          file.content.length > 500
+            ? `${file.content.substring(0, 500)}... [truncated ${file.content.length - 500} chars]`
+            : file.content,
       })),
     };
 
@@ -284,14 +309,15 @@ async function reviewUncommitted(mode, options) {
   console.log(chalk.yellow('\n📋 Ready to submit uncommitted changes for review:\n'));
   console.log(chalk.gray('  Comparing against HEAD (last commit)\n'));
   console.log(chalk.bold('  Files to review:'));
-  payload.changed_files.forEach(file => {
-    const statusColor = {
-      'M': chalk.yellow,
-      'A': chalk.green,
-      'D': chalk.red,
-      'R': chalk.blue,
-      'C': chalk.cyan,
-    }[file.status] || (text => text);
+  payload.changed_files.forEach((file) => {
+    const statusColor =
+      {
+        M: chalk.yellow,
+        A: chalk.green,
+        D: chalk.red,
+        R: chalk.blue,
+        C: chalk.cyan,
+      }[file.status] || ((text) => text);
     console.log(`    ${statusColor(file.status + ' ' + file.path)}`);
   });
   console.log();
@@ -315,7 +341,7 @@ async function reviewUncommitted(mode, options) {
   try {
     const response = await axios.post(apiEndpoint, payload, {
       headers: {
-        'Authorization': `Bearer ${apiKey}`,
+        Authorization: `Bearer ${apiKey}`,
         'Content-Type': 'application/json',
       },
     });
@@ -355,8 +381,12 @@ program
 
       console.log(chalk.bold('\nCurrent Configuration:\n'));
       console.log(`  API Key: ${apiKey ? chalk.green('✓ Set') : chalk.red('✗ Not set')}`);
-      console.log(`  API Endpoint: ${apiEndpoint ? chalk.cyan(apiEndpoint) : chalk.red('✗ Not set')}`);
-      console.log(`  Ticket System: ${ticketSystem ? chalk.cyan(ticketSystem) : chalk.gray('Not configured')}\n`);
+      console.log(
+        `  API Endpoint: ${apiEndpoint ? chalk.cyan(apiEndpoint) : chalk.red('✗ Not set')}`
+      );
+      console.log(
+        `  Ticket System: ${ticketSystem ? chalk.cyan(ticketSystem) : chalk.gray('Not configured')}\n`
+      );
       return;
     }
 
