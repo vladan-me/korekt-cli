@@ -6,7 +6,7 @@ dotenv.config({ quiet: true });
 
 // Initialize config
 const config = new Conf({
-  projectName: 'vladan-cli',
+  projectName: 'korekt-cli',
 });
 
 /**
@@ -17,7 +17,7 @@ export function getApiKey() {
   const configKey = config.get('apiKey');
   if (configKey) return configKey;
 
-  return process.env.VLADAN_API_KEY || null;
+  return process.env.KOREKT_API_KEY || null;
 }
 
 /**
@@ -35,7 +35,7 @@ export function getApiEndpoint() {
   const configEndpoint = config.get('apiEndpoint');
   if (configEndpoint) return configEndpoint;
 
-  return process.env.VLADAN_API_ENDPOINT || null;
+  return process.env.KOREKT_API_ENDPOINT || null;
 }
 
 /**
@@ -53,7 +53,7 @@ export function getTicketSystem() {
   const configTicketSystem = config.get('ticketSystem');
   if (configTicketSystem) return configTicketSystem;
 
-  return process.env.VLADAN_TICKET_SYSTEM || null;
+  return process.env.KOREKT_TICKET_SYSTEM || null;
 }
 
 /**

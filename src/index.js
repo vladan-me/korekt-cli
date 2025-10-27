@@ -28,25 +28,25 @@ async function confirmAction(message) {
 }
 
 program
-  .name('vladan-cli')
-  .description('An AI-powered code reviewer CLI')
-  .version('1.0.0')
+  .name('kk')
+  .description('AI-powered code review CLI - Keep your kode korekt')
+  .version('0.2.0')
   .addHelpText('after', `
 Examples:
-  $ vladan-cli review              Review committed changes (auto-detect base)
-  $ vladan-cli review main         Review changes against main branch
-  $ vladan-cli stg --dry-run       Preview staged changes review
-  $ vladan-cli diff                Review unstaged changes
-  $ vladan-cli all                 Review all uncommitted changes
+  $ kk review                      Review committed changes (auto-detect base)
+  $ kk review main                 Review changes against main branch
+  $ kk stg --dry-run               Preview staged changes review
+  $ kk diff                        Review unstaged changes
+  $ kk all                         Review all uncommitted changes
 
 Common Options:
   --dry-run                        Show payload without sending to API
   --ticket-system <system>         Use specific ticket system (jira or ado)
 
 Configuration:
-  $ vladan-cli config --key YOUR_KEY
-  $ vladan-cli config --endpoint http://localhost:8080/review/local
-  $ vladan-cli config --ticket-system ado
+  $ kk config --key YOUR_KEY
+  $ kk config --endpoint https://api.korekt.ai/review/local
+  $ kk config --ticket-system ado
 `);
 
 program
@@ -63,7 +63,7 @@ program
     const apiKey = getApiKey();
     if (!apiKey) {
       console.error(
-        chalk.red('API Key not found! Please run `vladan-cli config --key YOUR_KEY` first.')
+        chalk.red('API Key not found! Please run `kk config --key YOUR_KEY` first.')
       );
       return;
     }
@@ -71,7 +71,7 @@ program
     const apiEndpoint = getApiEndpoint();
     if (!apiEndpoint) {
       console.error(
-        chalk.red('API Endpoint not found! Please run `vladan-cli config --endpoint YOUR_ENDPOINT` first.')
+        chalk.red('API Endpoint not found! Please run `kk config --endpoint YOUR_ENDPOINT` first.')
       );
       return;
     }
@@ -161,7 +161,7 @@ program
     try {
       const response = await axios.post(apiEndpoint, payload, {
         headers: {
-          'X-API-KEY': apiKey,
+          'Authorization': `Bearer ${apiKey}`,
           'Content-Type': 'application/json',
         },
       });
@@ -225,7 +225,7 @@ async function reviewUncommitted(mode, options) {
   const apiKey = getApiKey();
   if (!apiKey) {
     console.error(
-      chalk.red('API Key not found! Please run `vladan-cli config --key YOUR_KEY` first.')
+      chalk.red('API Key not found! Please run `kk config --key YOUR_KEY` first.')
     );
     return;
   }
@@ -233,7 +233,7 @@ async function reviewUncommitted(mode, options) {
   const apiEndpoint = getApiEndpoint();
   if (!apiEndpoint) {
     console.error(
-      chalk.red('API Endpoint not found! Please run `vladan-cli config --endpoint YOUR_ENDPOINT` first.')
+      chalk.red('API Endpoint not found! Please run `kk config --endpoint YOUR_ENDPOINT` first.')
     );
     return;
   }
@@ -315,7 +315,7 @@ async function reviewUncommitted(mode, options) {
   try {
     const response = await axios.post(apiEndpoint, payload, {
       headers: {
-        'X-API-KEY': apiKey,
+        'Authorization': `Bearer ${apiKey}`,
         'Content-Type': 'application/json',
       },
     });
@@ -388,10 +388,10 @@ program
     if (!options.key && !options.endpoint && options.ticketSystem === undefined && !options.show) {
       console.log(chalk.yellow('Please provide at least one configuration option.'));
       console.log('\nUsage:');
-      console.log('  vladan-cli config --key YOUR_API_KEY');
-      console.log('  vladan-cli config --endpoint https://your-api.com/review/local');
-      console.log('  vladan-cli config --ticket-system jira');
-      console.log('  vladan-cli config --show              (view current configuration)');
+      console.log('  kk config --key YOUR_API_KEY');
+      console.log('  kk config --endpoint https://api.korekt.ai/review/local');
+      console.log('  kk config --ticket-system jira');
+      console.log('  kk config --show              (view current configuration)');
     }
   });
 

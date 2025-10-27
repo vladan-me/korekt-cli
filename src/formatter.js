@@ -76,7 +76,7 @@ function toAbsolutePath(filePath) {
  * @param {Object} data - The API response data
  */
 export function formatReviewOutput(data) {
-  const { review, summary } = data;
+  const { review, summary } = data.analysis;
 
   console.log(chalk.bold.blue('🤖 Automated Code Review Results\n'));
 
