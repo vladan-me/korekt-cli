@@ -457,6 +457,18 @@ describe('normalizeRepoUrl', () => {
     expect(normalizeRepoUrl(sshUrl)).toBe(expected);
   });
 
+  it('should normalize Bitbucket SSH URL to HTTPS', () => {
+    const sshUrl = 'git@bitbucket.org:user/repo.git';
+    const expected = 'https://bitbucket.org/user/repo';
+    expect(normalizeRepoUrl(sshUrl)).toBe(expected);
+  });
+
+  it('should normalize Bitbucket SSH URL without .git suffix', () => {
+    const sshUrl = 'git@bitbucket.org:user/repo';
+    const expected = 'https://bitbucket.org/user/repo';
+    expect(normalizeRepoUrl(sshUrl)).toBe(expected);
+  });
+
   it('should remove .git suffix from HTTPS URLs', () => {
     const httpsUrl = 'https://github.com/user/repo.git';
     const expected = 'https://github.com/user/repo';

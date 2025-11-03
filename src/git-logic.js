@@ -48,6 +48,13 @@ export function normalizeRepoUrl(url) {
     return `https://gitlab.com/${user}/${repo}`;
   }
 
+  // Handle Bitbucket SSH format: git@bitbucket.org:user/repo.git
+  const bitbucketSshMatch = url.match(/git@bitbucket\.org:([^/]+)\/(.+?)(?:\.git)?$/);
+  if (bitbucketSshMatch) {
+    const [, user, repo] = bitbucketSshMatch;
+    return `https://bitbucket.org/${user}/${repo}`;
+  }
+
   // If already HTTPS or other format, return as-is (possibly removing .git suffix)
   return url.replace(/\.git$/, '');
 }
