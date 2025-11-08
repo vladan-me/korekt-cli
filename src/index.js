@@ -5,6 +5,7 @@ import axios from 'axios';
 import chalk from 'chalk';
 import readline from 'readline';
 import ora from 'ora';
+import { createRequire } from 'module';
 import { runLocalReview } from './git-logic.js';
 import {
   getApiKey,
@@ -15,6 +16,55 @@ import {
   setTicketSystem,
 } from './config.js';
 import { formatReviewOutput } from './formatter.js';
+
+const require = createRequire(import.meta.url);
+const { version } = require('../package.json');
+
+/**
+ * Helper functions for clean output separation:
+ * - log() writes to stderr (progress, info, errors)
+ * - output() writes to stdout (final data only)
+ */
+const log = (msg) => process.stderr.write(msg + '\n');
+const output = (msg) => process.stdout.write(msg + '\n');
+
+/**
+ * Truncates file data (diff and content) for display purposes
+ * @param {Object} file - File object with path, status, diff, content, etc.
+ * @param {number} maxLength - Maximum length before truncation (default: 500)
+ * @returns {Object} File object with truncated diff and content
+ */
+export function truncateFileData(file, maxLength = 500) {
+  return {
+    path: file.path,
+    status: file.status,
+    ...(file.old_path && { old_path: file.old_path }),
+    diff:
+      file.diff.length > maxLength
+        ? `${file.diff.substring(0, maxLength)}... [truncated ${file.diff.length - maxLength} chars]`
+        : file.diff,
+    content:
+      file.content.length > maxLength
+        ? `${file.content.substring(0, maxLength)}... [truncated ${file.content.length - maxLength} chars]`
+        : file.content,
+  };
+}
+
+/**
+ * Formats error object for JSON output
+ * @param {Error} error - Error object from axios or other source
+ * @returns {Object} Formatted error output with success: false
+ */
+export function formatErrorOutput(error) {
+  return {
+    success: false,
+    error: error.message,
+    ...(error.response && {
+      status: error.response.status,
+      data: error.response.data,
+    }),
+  };
+}
 
 /**
  * Ask for user confirmation before proceeding
@@ -37,7 +87,7 @@ async function confirmAction(message) {
 program
   .name('kk')
   .description('AI-powered code review CLI - Keep your kode korekt')
-  .version('0.2.0')
+  .version(version)
   .addHelpText(
     'after',
     `
@@ -47,9 +97,11 @@ Examples:
   $ kk stg --dry-run               Preview staged changes review
   $ kk diff                        Review unstaged changes
   $ kk all                         Review all uncommitted changes
+  $ kk review main --json          Output raw JSON (for CI/CD integration)
 
 Common Options:
   --dry-run                        Show payload without sending to API
+  --json                           Output raw API response as JSON
   --ticket-system <system>         Use specific ticket system (jira or ado)
 
 Configuration:
@@ -72,108 +124,100 @@ program
     '--ignore <patterns...>',
     'Ignore files matching these patterns (e.g., "*.lock" "dist/*")'
   )
+  .option('--json', 'Output raw API response as JSON')
   .action(async (targetBranch, options) => {
     const reviewTarget = targetBranch ? `against '${targetBranch}'` : '(auto-detecting fork point)';
-    console.log(chalk.blue.bold(`🚀 Starting AI Code Review ${reviewTarget}...`));
+
+    // Progress messages go to stderr
+    log(chalk.blue.bold(`🚀 Starting AI Code Review ${reviewTarget}...`));
 
     const apiKey = getApiKey();
     if (!apiKey) {
-      console.error(chalk.red('API Key not found! Please run `kk config --key YOUR_KEY` first.'));
-      return;
+      log(chalk.red('API Key not found! Please run `kk config --key YOUR_KEY` first.'));
+      process.exit(1);
     }
 
     const apiEndpoint = getApiEndpoint();
     if (!apiEndpoint) {
-      console.error(
+      log(
         chalk.red('API Endpoint not found! Please run `kk config --endpoint YOUR_ENDPOINT` first.')
       );
-      return;
+      process.exit(1);
     }
 
-    // Step 1: Determine ticket system to use (or null if not configured)
+    // Determine ticket system to use (or null if not configured)
     const ticketSystem = options.ticketSystem || getTicketSystem() || null;
 
     // Validate ticket system
     if (ticketSystem && !['jira', 'ado'].includes(ticketSystem.toLowerCase())) {
-      console.error(chalk.red(`Invalid ticket system: ${ticketSystem}`));
-      console.error(chalk.gray('Valid options: jira, ado'));
-      return;
+      log(chalk.red(`Invalid ticket system: ${ticketSystem}`));
+      log(chalk.gray('Valid options: jira, ado'));
+      process.exit(1);
     }
 
-    // Step 2: Gather all data using our git logic module
+    // Gather all data using our git logic module
     const payload = await runLocalReview(targetBranch, ticketSystem, options.ignore);
 
     if (!payload) {
-      console.error(chalk.red('Could not proceed with review due to errors during analysis.'));
-      return;
+      log(chalk.red('Could not proceed with review due to errors during analysis.'));
+      process.exit(1);
     }
 
-    // Step 3: Add ticket system to payload if specified
+    // Add ticket system to payload if specified
     if (ticketSystem) {
       payload.ticket_system = ticketSystem;
-      console.log(chalk.gray(`Using ticket system: ${ticketSystem}`));
+      log(chalk.gray(`Using ticket system: ${ticketSystem}`));
     }
 
-    // Step 4: If dry-run, just show the payload and exit
+    // If dry-run, just show the payload and exit
     if (options.dryRun) {
-      console.log(chalk.yellow('\n📋 Dry Run - Payload that would be sent:\n'));
+      log(chalk.yellow('\n📋 Dry Run - Payload that would be sent:\n'));
 
       // Create a shortened version for display
       const displayPayload = {
         ...payload,
-        changed_files: payload.changed_files.map((file) => ({
-          path: file.path,
-          status: file.status,
-          ...(file.old_path && { old_path: file.old_path }),
-          diff:
-            file.diff.length > 500
-              ? `${file.diff.substring(0, 500)}... [truncated ${file.diff.length - 500} chars]`
-              : file.diff,
-          content:
-            file.content.length > 500
-              ? `${file.content.substring(0, 500)}... [truncated ${file.content.length - 500} chars]`
-              : file.content,
-        })),
+        changed_files: payload.changed_files.map((file) => truncateFileData(file)),
       };
 
-      console.log(JSON.stringify(displayPayload, null, 2));
-      console.log(chalk.gray('\n💡 Run without --dry-run to send to API'));
-      console.log(chalk.gray('💡 Diffs and content are truncated in dry-run for readability'));
+      log(JSON.stringify(displayPayload, null, 2));
+      log(chalk.gray('\n💡 Run without --dry-run to send to API'));
+      log(chalk.gray('💡 Diffs and content are truncated in dry-run for readability'));
       return;
     }
 
-    // Step 5: Show summary and ask for confirmation
-    console.log(chalk.yellow('\n📋 Ready to submit for review:\n'));
-    console.log(`  Branch: ${chalk.cyan(payload.source_branch)}`);
-    console.log(`  Commits: ${chalk.cyan(payload.commit_messages.length)}`);
-    console.log(`  Files: ${chalk.cyan(payload.changed_files.length)}\n`);
+    // Show summary and ask for confirmation (auto-confirm in JSON mode)
+    if (!options.json) {
+      log(chalk.yellow('\n📋 Ready to submit for review:\n'));
+      log(`  Branch: ${chalk.cyan(payload.source_branch)}`);
+      log(`  Commits: ${chalk.cyan(payload.commit_messages.length)}`);
+      log(`  Files: ${chalk.cyan(payload.changed_files.length)}\n`);
 
-    console.log(chalk.bold('  Files to review:'));
-    payload.changed_files.forEach((file) => {
-      const statusColor =
-        {
-          M: chalk.yellow,
-          A: chalk.green,
-          D: chalk.red,
-          R: chalk.blue,
-          C: chalk.cyan,
-        }[file.status] || ((text) => text);
-      console.log(`    ${statusColor(file.status + ' ' + file.path)}`);
-    });
-    console.log();
+      log(chalk.bold('  Files to review:'));
+      payload.changed_files.forEach((file) => {
+        const statusColor =
+          {
+            M: chalk.yellow,
+            A: chalk.green,
+            D: chalk.red,
+            R: chalk.blue,
+            C: chalk.cyan,
+          }[file.status] || ((text) => text);
+        log(`    ${statusColor(file.status + ' ' + file.path)}`);
+      });
+      log('');
 
-    const confirmed = await confirmAction(chalk.bold('Proceed with AI review? (Y/n): '));
+      const confirmed = await confirmAction(chalk.bold('Proceed with AI review? (Y/n): '));
 
-    if (!confirmed) {
-      console.log(chalk.yellow('Review cancelled.'));
-      return;
+      if (!confirmed) {
+        log(chalk.yellow('Review cancelled.'));
+        return;
+      }
     }
 
-    // Step 6: Send the payload to your API
+    // Send the payload to API with progress indicator
     const spinner = ora('Submitting review to the AI...').start();
     const startTime = Date.now();
 
-    // Update spinner with elapsed time every second
     const timer = setInterval(() => {
       const elapsed = Math.floor((Date.now() - startTime) / 1000);
       spinner.text = `Submitting review to the AI... ${elapsed}s`;
@@ -191,19 +235,32 @@ program
       const elapsed = Math.floor((Date.now() - startTime) / 1000);
       spinner.succeed(`Review completed in ${elapsed}s!`);
 
-      // Step 6: Format and display the results beautifully
-      formatReviewOutput(response.data);
+      // Output results to stdout
+      if (options.json) {
+        output(JSON.stringify(response.data, null, 2));
+      } else {
+        formatReviewOutput(response.data);
+      }
     } catch (error) {
       clearInterval(timer);
       const elapsed = Math.floor((Date.now() - startTime) / 1000);
       spinner.fail(`Review failed after ${elapsed}s`);
-      console.error(chalk.red('\n❌ An error occurred during the API request:'));
+
+      // Error details to stderr
+      log(chalk.red('\n❌ An error occurred during the API request:'));
       if (error.response) {
-        console.error(chalk.red('Status:'), error.response.status);
-        console.error(chalk.red('Data:'), JSON.stringify(error.response.data, null, 2));
+        log(chalk.red('Status:') + ' ' + error.response.status);
+        log(chalk.red('Data:') + ' ' + JSON.stringify(error.response.data, null, 2));
       } else {
-        console.error(error.message);
+        log(error.message);
       }
+
+      // If JSON mode, also output error as JSON to stdout
+      if (options.json) {
+        output(JSON.stringify(formatErrorOutput(error), null, 2));
+      }
+
+      process.exit(1);
     }
   });
 
@@ -213,8 +270,9 @@ program
   .description('Review staged changes (git diff --cached)')
   .option('--ticket-system <system>', 'Ticket system to use (jira or ado)')
   .option('--dry-run', 'Show payload without sending to API')
+  .option('--json', 'Output raw API response as JSON')
   .action(async (options) => {
-    console.log(chalk.blue.bold('🚀 Reviewing staged changes...'));
+    log(chalk.blue.bold('🚀 Reviewing staged changes...'));
     await reviewUncommitted('staged', options);
   });
 
@@ -225,8 +283,9 @@ program
   .option('--ticket-system <system>', 'Ticket system to use (jira or ado)')
   .option('--dry-run', 'Show payload without sending to API')
   .option('--untracked', 'Include untracked files in the review')
+  .option('--json', 'Output raw API response as JSON')
   .action(async (options) => {
-    console.log(chalk.blue.bold('🚀 Reviewing unstaged changes...'));
+    log(chalk.blue.bold('🚀 Reviewing unstaged changes...'));
     await reviewUncommitted('unstaged', options);
   });
 
@@ -237,102 +296,91 @@ program
   .option('--ticket-system <system>', 'Ticket system to use (jira or ado)')
   .option('--dry-run', 'Show payload without sending to API')
   .option('--untracked', 'Include untracked files in the review')
+  .option('--json', 'Output raw API response as JSON')
   .action(async (options) => {
-    console.log(chalk.blue.bold('🚀 Reviewing all uncommitted changes...'));
+    log(chalk.blue.bold('🚀 Reviewing all uncommitted changes...'));
     await reviewUncommitted('all', options);
   });
 
 async function reviewUncommitted(mode, options) {
   const apiKey = getApiKey();
   if (!apiKey) {
-    console.error(chalk.red('API Key not found! Please run `kk config --key YOUR_KEY` first.'));
-    return;
+    log(chalk.red('API Key not found! Please run `kk config --key YOUR_KEY` first.'));
+    process.exit(1);
   }
 
   const apiEndpoint = getApiEndpoint();
   if (!apiEndpoint) {
-    console.error(
+    log(
       chalk.red('API Endpoint not found! Please run `kk config --endpoint YOUR_ENDPOINT` first.')
     );
-    return;
+    process.exit(1);
   }
 
   const ticketSystem = options.ticketSystem || getTicketSystem() || null;
 
   if (ticketSystem && !['jira', 'ado'].includes(ticketSystem.toLowerCase())) {
-    console.error(chalk.red(`Invalid ticket system: ${ticketSystem}`));
-    console.error(chalk.gray('Valid options: jira, ado'));
-    return;
+    log(chalk.red(`Invalid ticket system: ${ticketSystem}`));
+    log(chalk.gray('Valid options: jira, ado'));
+    process.exit(1);
   }
 
-  // Import the function we'll create
   const { runUncommittedReview } = await import('./git-logic.js');
   const payload = await runUncommittedReview(mode, ticketSystem, options.untracked);
 
   if (!payload) {
-    // No changes found or error occurred - message already printed by runUncommittedReview
-    return;
+    log(chalk.red('No changes found or error occurred during analysis.'));
+    process.exit(1);
   }
 
   if (ticketSystem) {
     payload.ticket_system = ticketSystem;
-    console.log(chalk.gray(`Using ticket system: ${ticketSystem}`));
+    log(chalk.gray(`Using ticket system: ${ticketSystem}`));
   }
 
   if (options.dryRun) {
-    console.log(chalk.yellow('\n📋 Dry Run - Payload that would be sent:\n'));
+    log(chalk.yellow('\n📋 Dry Run - Payload that would be sent:\n'));
 
     const displayPayload = {
       ...payload,
-      changed_files: payload.changed_files.map((file) => ({
-        path: file.path,
-        status: file.status,
-        ...(file.old_path && { old_path: file.old_path }),
-        diff:
-          file.diff.length > 500
-            ? `${file.diff.substring(0, 500)}... [truncated ${file.diff.length - 500} chars]`
-            : file.diff,
-        content:
-          file.content.length > 500
-            ? `${file.content.substring(0, 500)}... [truncated ${file.content.length - 500} chars]`
-            : file.content,
-      })),
+      changed_files: payload.changed_files.map((file) => truncateFileData(file)),
     };
 
-    console.log(JSON.stringify(displayPayload, null, 2));
-    console.log(chalk.gray('\n💡 Run without --dry-run to send to API'));
-    console.log(chalk.gray('💡 Diffs and content are truncated in dry-run for readability'));
+    log(JSON.stringify(displayPayload, null, 2));
+    log(chalk.gray('\n💡 Run without --dry-run to send to API'));
+    log(chalk.gray('💡 Diffs and content are truncated in dry-run for readability'));
     return;
   }
 
-  // Show summary and ask for confirmation
-  console.log(chalk.yellow('\n📋 Ready to submit uncommitted changes for review:\n'));
-  console.log(chalk.gray('  Comparing against HEAD (last commit)\n'));
-  console.log(chalk.bold('  Files to review:'));
-  payload.changed_files.forEach((file) => {
-    const statusColor =
-      {
-        M: chalk.yellow,
-        A: chalk.green,
-        D: chalk.red,
-        R: chalk.blue,
-        C: chalk.cyan,
-      }[file.status] || ((text) => text);
-    console.log(`    ${statusColor(file.status + ' ' + file.path)}`);
-  });
-  console.log();
+  // Show summary and ask for confirmation (auto-confirm in JSON mode)
+  if (!options.json) {
+    log(chalk.yellow('\n📋 Ready to submit uncommitted changes for review:\n'));
+    log(chalk.gray('  Comparing against HEAD (last commit)\n'));
+    log(chalk.bold('  Files to review:'));
+    payload.changed_files.forEach((file) => {
+      const statusColor =
+        {
+          M: chalk.yellow,
+          A: chalk.green,
+          D: chalk.red,
+          R: chalk.blue,
+          C: chalk.cyan,
+        }[file.status] || ((text) => text);
+      log(`    ${statusColor(file.status + ' ' + file.path)}`);
+    });
+    log('');
 
-  const confirmed = await confirmAction(chalk.bold('Proceed with AI review? (Y/n): '));
+    const confirmed = await confirmAction(chalk.bold('Proceed with AI review? (Y/n): '));
 
-  if (!confirmed) {
-    console.log(chalk.yellow('Review cancelled.'));
-    return;
+    if (!confirmed) {
+      log(chalk.yellow('Review cancelled.'));
+      return;
+    }
   }
 
   const spinner = ora('Submitting review to the AI...').start();
   const startTime = Date.now();
 
-  // Update spinner with elapsed time every second
   const timer = setInterval(() => {
     const elapsed = Math.floor((Date.now() - startTime) / 1000);
     spinner.text = `Submitting review to the AI... ${elapsed}s`;
@@ -350,18 +398,32 @@ async function reviewUncommitted(mode, options) {
     const elapsed = Math.floor((Date.now() - startTime) / 1000);
     spinner.succeed(`Review completed in ${elapsed}s!`);
 
-    formatReviewOutput(response.data);
+    // Output results to stdout
+    if (options.json) {
+      output(JSON.stringify(response.data, null, 2));
+    } else {
+      formatReviewOutput(response.data);
+    }
   } catch (error) {
     clearInterval(timer);
     const elapsed = Math.floor((Date.now() - startTime) / 1000);
     spinner.fail(`Review failed after ${elapsed}s`);
-    console.error(chalk.red('\n❌ An error occurred during the API request:'));
+
+    // Error details to stderr
+    log(chalk.red('\n❌ An error occurred during the API request:'));
     if (error.response) {
-      console.error(chalk.red('Status:'), error.response.status);
-      console.error(chalk.red('Data:'), JSON.stringify(error.response.data, null, 2));
+      log(chalk.red('Status:') + ' ' + error.response.status);
+      log(chalk.red('Data:') + ' ' + JSON.stringify(error.response.data, null, 2));
     } else {
-      console.error(error.message);
+      log(error.message);
     }
+
+    // If JSON mode, also output error as JSON to stdout
+    if (options.json) {
+      output(JSON.stringify(formatErrorOutput(error), null, 2));
+    }
+
+    process.exit(1);
   }
 }
 
@@ -425,4 +487,8 @@ program
     }
   });
 
-program.parse();
+// Only parse arguments if this file is being run directly (not imported)
+// In tests, we set NODE_ENV to 'test' via vitest
+if (process.env.NODE_ENV !== 'test') {
+  program.parse();
+}
