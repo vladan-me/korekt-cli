@@ -1,6 +1,7 @@
 import { execa } from 'execa';
 import chalk from 'chalk';
 import fs from 'fs';
+import path from 'path';
 
 /**
  * Truncate content to a maximum number of lines using "head and tail".
@@ -146,25 +147,33 @@ export async function runUncommittedReview(
   includeUntracked = false
 ) {
   try {
-    // 1. Get Repo URL and current branch name
+    // 1. Get Repo URL, current branch name, and repository root
     const { stdout: repoUrl } = await execa('git', ['remote', 'get-url', 'origin']);
     const { stdout: sourceBranch } = await execa('git', ['rev-parse', '--abbrev-ref', 'HEAD']);
     const branchName = sourceBranch.trim();
 
+    // Get the repository root directory - we'll run all git commands from there
+    const { stdout: repoRoot } = await execa('git', ['rev-parse', '--show-toplevel']);
+    const repoRootPath = repoRoot.trim();
+
+    // Helper to run git commands from repo root
+    const git = async (...args) => {
+      const { stdout } = await execa('git', args, { cwd: repoRootPath });
+      return stdout;
+    };
+
     // 2. Get changed files based on mode
     let nameStatusOutput;
     if (mode === 'staged') {
-      const { stdout } = await execa('git', ['diff', '--cached', '--name-status']);
-      nameStatusOutput = stdout;
+      nameStatusOutput = await git('diff', '--cached', '--name-status');
       console.log(chalk.gray('Analyzing staged changes...'));
     } else if (mode === 'unstaged') {
-      const { stdout } = await execa('git', ['diff', '--name-status']);
-      nameStatusOutput = stdout;
+      nameStatusOutput = await git('diff', '--name-status');
       console.log(chalk.gray('Analyzing unstaged changes...'));
     } else {
       // mode === 'all': combine staged and unstaged
-      const { stdout: staged } = await execa('git', ['diff', '--cached', '--name-status']);
-      const { stdout: unstaged } = await execa('git', ['diff', '--name-status']);
+      const staged = await git('diff', '--cached', '--name-status');
+      const unstaged = await git('diff', '--name-status');
       nameStatusOutput = [staged, unstaged].filter(Boolean).join('\n');
       console.log(chalk.gray('Analyzing all uncommitted changes...'));
     }
@@ -175,15 +184,12 @@ export async function runUncommittedReview(
     // Handle untracked files if requested
     if (includeUntracked) {
       console.log(chalk.gray('Analyzing untracked files...'));
-      const { stdout: untrackedFilesOutput } = await execa('git', [
-        'ls-files',
-        '--others',
-        '--exclude-standard',
-      ]);
+      const untrackedFilesOutput = await git('ls-files', '--others', '--exclude-standard');
       const untrackedFiles = untrackedFilesOutput.split('\n').filter(Boolean);
 
       for (const file of untrackedFiles) {
-        const content = fs.readFileSync(file, 'utf-8');
+        const fullPath = path.join(repoRootPath, file);
+        const content = fs.readFileSync(fullPath, 'utf-8');
         const diff = content
           .split('\n')
           .map((line) => `+${line}`)
@@ -206,33 +212,21 @@ export async function runUncommittedReview(
     for (const file of uniqueFileList) {
       const { status, path, oldPath } = file;
 
-      // Get diff based on mode
+      // Get diff for this file
       let diff;
       if (mode === 'staged') {
-        const { stdout } = await execa('git', ['diff', '--cached', '-U15', '--', path]);
-        diff = stdout;
+        diff = await git('diff', '--cached', '-U15', '--', path);
       } else if (mode === 'unstaged') {
-        const { stdout } = await execa('git', ['diff', '-U15', '--', path]);
-        diff = stdout;
+        diff = await git('diff', '-U15', '--', path);
       } else {
         // For 'all', try staged first, then unstaged
         try {
-          const { stdout: stagedDiff } = await execa('git', [
-            'diff',
-            '--cached',
-            '-U15',
-            '--',
-            path,
-          ]);
-          if (stagedDiff) {
-            diff = stagedDiff;
-          } else {
-            const { stdout: unstagedDiff } = await execa('git', ['diff', '-U15', '--', path]);
-            diff = unstagedDiff;
+          diff = await git('diff', '--cached', '-U15', '--', path);
+          if (!diff) {
+            diff = await git('diff', '-U15', '--', path);
           }
         } catch {
-          const { stdout: unstagedDiff } = await execa('git', ['diff', '-U15', '--', path]);
-          diff = unstagedDiff;
+          diff = await git('diff', '-U15', '--', path);
         }
       }
 
@@ -240,8 +234,7 @@ export async function runUncommittedReview(
       let content = '';
       if (status !== 'A') {
         try {
-          const { stdout: headContent } = await execa('git', ['show', `HEAD:${oldPath}`]);
-          content = headContent;
+          content = await git('show', `HEAD:${oldPath}`);
         } catch {
           console.warn(
             chalk.yellow(`Could not get HEAD content for ${oldPath}. Assuming it's new.`)

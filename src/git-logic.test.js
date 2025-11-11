@@ -66,6 +66,9 @@ describe('runUncommittedReview', () => {
       if (command.includes('rev-parse --abbrev-ref HEAD')) {
         return { stdout: 'feature-branch' };
       }
+      if (command.includes('rev-parse --show-toplevel')) {
+        return { stdout: '/fake/repo/path' };
+      }
       if (command.includes('diff --cached --name-status')) {
         return { stdout: 'M\tfile.js' };
       }
@@ -100,6 +103,9 @@ describe('runUncommittedReview', () => {
       if (command.includes('rev-parse --abbrev-ref HEAD')) {
         return { stdout: 'feature-branch' };
       }
+      if (command.includes('rev-parse --show-toplevel')) {
+        return { stdout: '/fake/repo/path' };
+      }
       if (command === 'git diff --name-status') {
         return { stdout: 'M\tfile.js' };
       }
@@ -129,6 +135,9 @@ describe('runUncommittedReview', () => {
       }
       if (command.includes('rev-parse --abbrev-ref HEAD')) {
         return { stdout: 'feature-branch' };
+      }
+      if (command.includes('rev-parse --show-toplevel')) {
+        return { stdout: '/fake/repo/path' };
       }
       if (command.includes('diff --cached --name-status')) {
         return { stdout: 'M\tstaged.js' };
@@ -169,6 +178,9 @@ describe('runUncommittedReview', () => {
       }
       if (command.includes('rev-parse --abbrev-ref HEAD')) {
         return { stdout: 'feature-branch' };
+      }
+      if (command.includes('rev-parse --show-toplevel')) {
+        return { stdout: '/fake/repo/path' };
       }
       if (command.includes('diff --cached --name-status')) {
         return { stdout: '' };
