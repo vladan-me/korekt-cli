@@ -305,30 +305,52 @@ export async function runLocalReview(
     // If a branch is provided, check it exists and try to fetch latest remote version
     let targetBranchRef = targetBranch; // Will be updated to origin/branch if remote exists
     if (targetBranch) {
-      // Check if the branch exists locally
-      try {
-        await execa('git', ['rev-parse', '--verify', targetBranch]);
-      } catch {
-        console.error(chalk.red(`Branch '${targetBranch}' does not exist locally.`));
-        console.error(chalk.gray(`Please check out the branch first or specify a different one.`));
-        return null;
-      }
+      // Check if user already specified a remote-tracking branch (e.g., origin/master)
+      const isRemoteRef = targetBranch.startsWith('origin/');
 
-      // Try to fetch the latest changes from remote (non-destructive)
-      try {
-        console.error(chalk.gray(`Fetching latest changes for branch '${targetBranch}'...`));
-        await execa('git', ['fetch', 'origin', targetBranch]);
+      if (isRemoteRef) {
+        // User specified origin/branch - verify it exists and use it directly
+        try {
+          await execa('git', ['rev-parse', '--verify', targetBranch]);
+          console.error(
+            chalk.gray(`Using remote-tracking branch '${targetBranch}' for comparison.`)
+          );
+          targetBranchRef = targetBranch;
+        } catch {
+          console.error(chalk.red(`Remote-tracking branch '${targetBranch}' does not exist.`));
+          console.error(chalk.gray(`Try fetching it first with: git fetch origin`));
+          return null;
+        }
+      } else {
+        // Local branch name specified - check if it exists locally
+        try {
+          await execa('git', ['rev-parse', '--verify', targetBranch]);
+        } catch {
+          console.error(chalk.red(`Branch '${targetBranch}' does not exist locally.`));
+          console.error(
+            chalk.gray(`Please check out the branch first or specify a different one.`)
+          );
+          return null;
+        }
 
-        // If fetch succeeded, use the remote-tracking branch for comparison
-        // This is safer as it doesn't modify the user's local branch
-        targetBranchRef = `origin/${targetBranch}`;
-        console.error(
-          chalk.gray(`Using remote-tracking branch 'origin/${targetBranch}' for comparison.`)
-        );
-      } catch {
-        console.warn(chalk.yellow(`Could not fetch remote branch 'origin/${targetBranch}'.`));
-        console.warn(chalk.gray(`Proceeding with local branch '${targetBranch}' for comparison.`));
-        // targetBranchRef stays as targetBranch (local branch)
+        // Try to fetch the latest changes from remote (non-destructive)
+        try {
+          console.error(chalk.gray(`Fetching latest changes for branch '${targetBranch}'...`));
+          await execa('git', ['fetch', 'origin', targetBranch]);
+
+          // If fetch succeeded, use the remote-tracking branch for comparison
+          // This is safer as it doesn't modify the user's local branch
+          targetBranchRef = `origin/${targetBranch}`;
+          console.error(
+            chalk.gray(`Using remote-tracking branch 'origin/${targetBranch}' for comparison.`)
+          );
+        } catch {
+          console.warn(chalk.yellow(`Could not fetch remote branch 'origin/${targetBranch}'.`));
+          console.warn(
+            chalk.gray(`Proceeding with local branch '${targetBranch}' for comparison.`)
+          );
+          // targetBranchRef stays as targetBranch (local branch)
+        }
       }
     }
 
