@@ -24,7 +24,7 @@ jobs:
           node-version: '20'
 
       - name: Install korekt-cli
-        run: npm install -g korekt-cli
+        run: npm install -g korekt-cli@beta
 
       - name: Configure korekt
         env:

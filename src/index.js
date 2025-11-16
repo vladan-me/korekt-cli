@@ -460,11 +460,19 @@ program
       return;
     }
 
-    if (options.key) {
+    if (options.key !== undefined) {
+      if (!options.key || options.key.trim() === '') {
+        console.error(chalk.red('API Key cannot be empty'));
+        process.exit(1);
+      }
       setApiKey(options.key);
       console.log(chalk.green('✓ API Key saved successfully!'));
     }
-    if (options.endpoint) {
+    if (options.endpoint !== undefined) {
+      if (!options.endpoint || options.endpoint.trim() === '') {
+        console.error(chalk.red('API Endpoint cannot be empty'));
+        process.exit(1);
+      }
       setApiEndpoint(options.endpoint);
       console.log(chalk.green('✓ API Endpoint saved successfully!'));
     }
