@@ -11,6 +11,9 @@ on:
 jobs:
   korekt-review:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
 
     steps:
       - name: Checkout code
@@ -32,7 +35,7 @@ jobs:
         run: kk config --key "$KOREKT_API_KEY"
 
       - name: Run AI Code Review
-        run: kk review origin/${{ github.base_ref }} --json > results.json
+        run: kk review ${{ github.base_ref }} --json > results.json
 
       - name: Upload Results
         if: always()
