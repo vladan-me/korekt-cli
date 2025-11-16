@@ -244,16 +244,16 @@ post_review_thread() {
 }
 
 # Parse results
-TOTAL_ISSUES=$(jq -r '.summary.total_issues // 0' "$RESULTS_FILE")
-TOTAL_PRAISES=$(jq -r '.summary.total_praises // 0' "$RESULTS_FILE")
-CRITICAL_ISSUES=$(jq -r '.summary.critical // 0' "$RESULTS_FILE")
+TOTAL_ISSUES=$(jq -r '.data.summary.total_issues // 0' "$RESULTS_FILE")
+TOTAL_PRAISES=$(jq -r '.data.summary.total_praises // 0' "$RESULTS_FILE")
+CRITICAL_ISSUES=$(jq -r '.data.summary.critical // 0' "$RESULTS_FILE")
 
 # Post inline comments for issues (excluding low severity)
 if [ "$TOTAL_ISSUES" -gt 0 ] && [ "$POST_INLINE_COMMENTS" = "true" ]; then
   populate_existing_comments_map
 
   echo "Posting inline comments for non-low severity issues..."
-  jq -r '.review.issues[] | select(.severity != "low") | @json' "$RESULTS_FILE" | while IFS= read -r issue_json; do
+  jq -r '.data.review.issues[] | select(.severity != "low") | @json' "$RESULTS_FILE" | while IFS= read -r issue_json; do
     file_path=$(echo "$issue_json" | jq -r '.file_path')
     line_number=$(echo "$issue_json" | jq -r '.line_number')
     message=$(echo "$issue_json" | jq -r '.message')
@@ -337,7 +337,7 @@ else
   if [ "$TOTAL_PRAISES" -gt 0 ]; then
     echo "### ✨ Praises ($TOTAL_PRAISES)" >> "$COMMENT_FILE"
     echo "" >> "$COMMENT_FILE"
-    jq -r '.review.praises[] | @json' "$RESULTS_FILE" | while IFS= read -r praise_json; do
+    jq -r '.data.review.praises[] | @json' "$RESULTS_FILE" | while IFS= read -r praise_json; do
       file_path=$(echo "$praise_json" | jq -r '.file_path')
       line_number=$(echo "$praise_json" | jq -r '.line_number')
       message=$(echo "$praise_json" | jq -r '.message')
@@ -355,9 +355,9 @@ else
 
   # Issues section
   if [ "$TOTAL_ISSUES" -gt 0 ]; then
-    HIGH_ISSUES=$(jq -r '.summary.high // 0' "$RESULTS_FILE")
-    MEDIUM_ISSUES=$(jq -r '.summary.medium // 0' "$RESULTS_FILE")
-    LOW_ISSUES=$(jq -r '.summary.low // 0' "$RESULTS_FILE")
+    HIGH_ISSUES=$(jq -r '.data.summary.high // 0' "$RESULTS_FILE")
+    MEDIUM_ISSUES=$(jq -r '.data.summary.medium // 0' "$RESULTS_FILE")
+    LOW_ISSUES=$(jq -r '.data.summary.low // 0' "$RESULTS_FILE")
 
     echo "### ⚠️ Issues Found ($TOTAL_ISSUES)" >> "$COMMENT_FILE"
     echo "" >> "$COMMENT_FILE"
@@ -369,7 +369,7 @@ else
     [ "$LOW_ISSUES" -gt 0 ] && echo "| 🟡 Low | $LOW_ISSUES |" >> "$COMMENT_FILE"
     echo "" >> "$COMMENT_FILE"
 
-    jq -r '.review.issues[] | @json' "$RESULTS_FILE" | while IFS= read -r issue_json; do
+    jq -r '.data.review.issues[] | @json' "$RESULTS_FILE" | while IFS= read -r issue_json; do
       file_path=$(echo "$issue_json" | jq -r '.file_path')
       line_number=$(echo "$issue_json" | jq -r '.line_number')
       message=$(echo "$issue_json" | jq -r '.message')
