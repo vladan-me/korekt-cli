@@ -166,16 +166,16 @@ export async function runUncommittedReview(
     let nameStatusOutput;
     if (mode === 'staged') {
       nameStatusOutput = await git('diff', '--cached', '--name-status');
-      console.log(chalk.gray('Analyzing staged changes...'));
+      console.error(chalk.gray('Analyzing staged changes...'));
     } else if (mode === 'unstaged') {
       nameStatusOutput = await git('diff', '--name-status');
-      console.log(chalk.gray('Analyzing unstaged changes...'));
+      console.error(chalk.gray('Analyzing unstaged changes...'));
     } else {
       // mode === 'all': combine staged and unstaged
       const staged = await git('diff', '--cached', '--name-status');
       const unstaged = await git('diff', '--name-status');
       nameStatusOutput = [staged, unstaged].filter(Boolean).join('\n');
-      console.log(chalk.gray('Analyzing all uncommitted changes...'));
+      console.error(chalk.gray('Analyzing all uncommitted changes...'));
     }
 
     const fileList = parseNameStatus(nameStatusOutput);
@@ -183,7 +183,7 @@ export async function runUncommittedReview(
 
     // Handle untracked files if requested
     if (includeUntracked) {
-      console.log(chalk.gray('Analyzing untracked files...'));
+      console.error(chalk.gray('Analyzing untracked files...'));
       const untrackedFilesOutput = await git('ls-files', '--others', '--exclude-standard');
       const untrackedFiles = untrackedFilesOutput.split('\n').filter(Boolean);
 
@@ -260,7 +260,7 @@ export async function runUncommittedReview(
     }
 
     if (!nameStatusOutput.trim() && changedFiles.length === 0) {
-      console.log(chalk.yellow('No changes found to review.'));
+      console.error(chalk.yellow('No changes found to review.'));
       return null;
     }
 
@@ -316,13 +316,13 @@ export async function runLocalReview(
 
       // Try to fetch the latest changes from remote (non-destructive)
       try {
-        console.log(chalk.gray(`Fetching latest changes for branch '${targetBranch}'...`));
+        console.error(chalk.gray(`Fetching latest changes for branch '${targetBranch}'...`));
         await execa('git', ['fetch', 'origin', targetBranch]);
 
         // If fetch succeeded, use the remote-tracking branch for comparison
         // This is safer as it doesn't modify the user's local branch
         targetBranchRef = `origin/${targetBranch}`;
-        console.log(
+        console.error(
           chalk.gray(`Using remote-tracking branch 'origin/${targetBranch}' for comparison.`)
         );
       } catch {
@@ -352,7 +352,7 @@ export async function runLocalReview(
           const match = creationLine.match(/^([a-f0-9]{40})/);
           if (match) {
             mergeBase = match[1];
-            console.log(
+            console.error(
               chalk.gray(`Auto-detected fork point from reflog: ${mergeBase.substring(0, 7)}`)
             );
           }
@@ -372,7 +372,7 @@ export async function runLocalReview(
       // 3. Use specified target branch (either remote-tracking or local)
       const { stdout: base } = await execa('git', ['merge-base', targetBranchRef, 'HEAD']);
       mergeBase = base.trim();
-      console.log(
+      console.error(
         chalk.gray(
           `Comparing against ${targetBranchRef} (merge-base: ${mergeBase.substring(0, 7)})...`
         )
@@ -380,7 +380,7 @@ export async function runLocalReview(
     }
 
     const diffRange = `${mergeBase}..HEAD`;
-    console.log(chalk.gray(`Analyzing commits from ${mergeBase.substring(0, 7)} to HEAD...`));
+    console.error(chalk.gray(`Analyzing commits from ${mergeBase.substring(0, 7)} to HEAD...`));
 
     // 3. Get Commit Messages with proper delimiter
     const { stdout: logOutput } = await execa('git', ['log', '--pretty=%B---EOC---', diffRange], {
@@ -405,17 +405,17 @@ export async function runLocalReview(
         const ignored = shouldIgnoreFile(file.path, ignorePatterns);
         if (ignored) {
           ignoredCount++;
-          console.log(chalk.gray(`  Ignoring: ${file.path}`));
+          console.error(chalk.gray(`  Ignoring: ${file.path}`));
         }
         return !ignored;
       });
     }
 
     if (ignoredCount > 0) {
-      console.log(chalk.gray(`Ignored ${ignoredCount} file(s) based on patterns\n`));
+      console.error(chalk.gray(`Ignored ${ignoredCount} file(s) based on patterns\n`));
     }
 
-    console.log(chalk.gray(`Collecting diffs for ${filteredFileList.length} file(s)...`));
+    console.error(chalk.gray(`Collecting diffs for ${filteredFileList.length} file(s)...`));
 
     const changedFiles = [];
     for (const file of filteredFileList) {
