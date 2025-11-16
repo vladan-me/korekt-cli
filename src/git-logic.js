@@ -1,6 +1,7 @@
 import { execa } from 'execa';
 import chalk from 'chalk';
 import fs from 'fs';
+import path from 'path';
 
 /**
  * Truncate content to a maximum number of lines using "head and tail".
@@ -146,27 +147,35 @@ export async function runUncommittedReview(
   includeUntracked = false
 ) {
   try {
-    // 1. Get Repo URL and current branch name
+    // 1. Get Repo URL, current branch name, and repository root
     const { stdout: repoUrl } = await execa('git', ['remote', 'get-url', 'origin']);
     const { stdout: sourceBranch } = await execa('git', ['rev-parse', '--abbrev-ref', 'HEAD']);
     const branchName = sourceBranch.trim();
 
+    // Get the repository root directory - we'll run all git commands from there
+    const { stdout: repoRoot } = await execa('git', ['rev-parse', '--show-toplevel']);
+    const repoRootPath = repoRoot.trim();
+
+    // Helper to run git commands from repo root
+    const git = async (...args) => {
+      const { stdout } = await execa('git', args, { cwd: repoRootPath });
+      return stdout;
+    };
+
     // 2. Get changed files based on mode
     let nameStatusOutput;
     if (mode === 'staged') {
-      const { stdout } = await execa('git', ['diff', '--cached', '--name-status']);
-      nameStatusOutput = stdout;
-      console.log(chalk.gray('Analyzing staged changes...'));
+      nameStatusOutput = await git('diff', '--cached', '--name-status');
+      console.error(chalk.gray('Analyzing staged changes...'));
     } else if (mode === 'unstaged') {
-      const { stdout } = await execa('git', ['diff', '--name-status']);
-      nameStatusOutput = stdout;
-      console.log(chalk.gray('Analyzing unstaged changes...'));
+      nameStatusOutput = await git('diff', '--name-status');
+      console.error(chalk.gray('Analyzing unstaged changes...'));
     } else {
       // mode === 'all': combine staged and unstaged
-      const { stdout: staged } = await execa('git', ['diff', '--cached', '--name-status']);
-      const { stdout: unstaged } = await execa('git', ['diff', '--name-status']);
+      const staged = await git('diff', '--cached', '--name-status');
+      const unstaged = await git('diff', '--name-status');
       nameStatusOutput = [staged, unstaged].filter(Boolean).join('\n');
-      console.log(chalk.gray('Analyzing all uncommitted changes...'));
+      console.error(chalk.gray('Analyzing all uncommitted changes...'));
     }
 
     const fileList = parseNameStatus(nameStatusOutput);
@@ -174,16 +183,13 @@ export async function runUncommittedReview(
 
     // Handle untracked files if requested
     if (includeUntracked) {
-      console.log(chalk.gray('Analyzing untracked files...'));
-      const { stdout: untrackedFilesOutput } = await execa('git', [
-        'ls-files',
-        '--others',
-        '--exclude-standard',
-      ]);
+      console.error(chalk.gray('Analyzing untracked files...'));
+      const untrackedFilesOutput = await git('ls-files', '--others', '--exclude-standard');
       const untrackedFiles = untrackedFilesOutput.split('\n').filter(Boolean);
 
       for (const file of untrackedFiles) {
-        const content = fs.readFileSync(file, 'utf-8');
+        const fullPath = path.join(repoRootPath, file);
+        const content = fs.readFileSync(fullPath, 'utf-8');
         const diff = content
           .split('\n')
           .map((line) => `+${line}`)
@@ -206,33 +212,21 @@ export async function runUncommittedReview(
     for (const file of uniqueFileList) {
       const { status, path, oldPath } = file;
 
-      // Get diff based on mode
+      // Get diff for this file
       let diff;
       if (mode === 'staged') {
-        const { stdout } = await execa('git', ['diff', '--cached', '-U15', '--', path]);
-        diff = stdout;
+        diff = await git('diff', '--cached', '-U15', '--', path);
       } else if (mode === 'unstaged') {
-        const { stdout } = await execa('git', ['diff', '-U15', '--', path]);
-        diff = stdout;
+        diff = await git('diff', '-U15', '--', path);
       } else {
         // For 'all', try staged first, then unstaged
         try {
-          const { stdout: stagedDiff } = await execa('git', [
-            'diff',
-            '--cached',
-            '-U15',
-            '--',
-            path,
-          ]);
-          if (stagedDiff) {
-            diff = stagedDiff;
-          } else {
-            const { stdout: unstagedDiff } = await execa('git', ['diff', '-U15', '--', path]);
-            diff = unstagedDiff;
+          diff = await git('diff', '--cached', '-U15', '--', path);
+          if (!diff) {
+            diff = await git('diff', '-U15', '--', path);
           }
         } catch {
-          const { stdout: unstagedDiff } = await execa('git', ['diff', '-U15', '--', path]);
-          diff = unstagedDiff;
+          diff = await git('diff', '-U15', '--', path);
         }
       }
 
@@ -240,8 +234,7 @@ export async function runUncommittedReview(
       let content = '';
       if (status !== 'A') {
         try {
-          const { stdout: headContent } = await execa('git', ['show', `HEAD:${oldPath}`]);
-          content = headContent;
+          content = await git('show', `HEAD:${oldPath}`);
         } catch {
           console.warn(
             chalk.yellow(`Could not get HEAD content for ${oldPath}. Assuming it's new.`)
@@ -267,7 +260,7 @@ export async function runUncommittedReview(
     }
 
     if (!nameStatusOutput.trim() && changedFiles.length === 0) {
-      console.log(chalk.yellow('No changes found to review.'));
+      console.error(chalk.yellow('No changes found to review.'));
       return null;
     }
 
@@ -312,30 +305,52 @@ export async function runLocalReview(
     // If a branch is provided, check it exists and try to fetch latest remote version
     let targetBranchRef = targetBranch; // Will be updated to origin/branch if remote exists
     if (targetBranch) {
-      // Check if the branch exists locally
-      try {
-        await execa('git', ['rev-parse', '--verify', targetBranch]);
-      } catch {
-        console.error(chalk.red(`Branch '${targetBranch}' does not exist locally.`));
-        console.error(chalk.gray(`Please check out the branch first or specify a different one.`));
-        return null;
-      }
+      // Check if user already specified a remote-tracking branch (e.g., origin/master)
+      const isRemoteRef = targetBranch.startsWith('origin/');
 
-      // Try to fetch the latest changes from remote (non-destructive)
-      try {
-        console.log(chalk.gray(`Fetching latest changes for branch '${targetBranch}'...`));
-        await execa('git', ['fetch', 'origin', targetBranch]);
+      if (isRemoteRef) {
+        // User specified origin/branch - verify it exists and use it directly
+        try {
+          await execa('git', ['rev-parse', '--verify', targetBranch]);
+          console.error(
+            chalk.gray(`Using remote-tracking branch '${targetBranch}' for comparison.`)
+          );
+          targetBranchRef = targetBranch;
+        } catch {
+          console.error(chalk.red(`Remote-tracking branch '${targetBranch}' does not exist.`));
+          console.error(chalk.gray(`Try fetching it first with: git fetch origin`));
+          return null;
+        }
+      } else {
+        // Local branch name specified - check if it exists locally
+        try {
+          await execa('git', ['rev-parse', '--verify', targetBranch]);
+        } catch {
+          console.error(chalk.red(`Branch '${targetBranch}' does not exist locally.`));
+          console.error(
+            chalk.gray(`Please check out the branch first or specify a different one.`)
+          );
+          return null;
+        }
 
-        // If fetch succeeded, use the remote-tracking branch for comparison
-        // This is safer as it doesn't modify the user's local branch
-        targetBranchRef = `origin/${targetBranch}`;
-        console.log(
-          chalk.gray(`Using remote-tracking branch 'origin/${targetBranch}' for comparison.`)
-        );
-      } catch {
-        console.warn(chalk.yellow(`Could not fetch remote branch 'origin/${targetBranch}'.`));
-        console.warn(chalk.gray(`Proceeding with local branch '${targetBranch}' for comparison.`));
-        // targetBranchRef stays as targetBranch (local branch)
+        // Try to fetch the latest changes from remote (non-destructive)
+        try {
+          console.error(chalk.gray(`Fetching latest changes for branch '${targetBranch}'...`));
+          await execa('git', ['fetch', 'origin', targetBranch]);
+
+          // If fetch succeeded, use the remote-tracking branch for comparison
+          // This is safer as it doesn't modify the user's local branch
+          targetBranchRef = `origin/${targetBranch}`;
+          console.error(
+            chalk.gray(`Using remote-tracking branch 'origin/${targetBranch}' for comparison.`)
+          );
+        } catch {
+          console.warn(chalk.yellow(`Could not fetch remote branch 'origin/${targetBranch}'.`));
+          console.warn(
+            chalk.gray(`Proceeding with local branch '${targetBranch}' for comparison.`)
+          );
+          // targetBranchRef stays as targetBranch (local branch)
+        }
       }
     }
 
@@ -359,7 +374,7 @@ export async function runLocalReview(
           const match = creationLine.match(/^([a-f0-9]{40})/);
           if (match) {
             mergeBase = match[1];
-            console.log(
+            console.error(
               chalk.gray(`Auto-detected fork point from reflog: ${mergeBase.substring(0, 7)}`)
             );
           }
@@ -379,7 +394,7 @@ export async function runLocalReview(
       // 3. Use specified target branch (either remote-tracking or local)
       const { stdout: base } = await execa('git', ['merge-base', targetBranchRef, 'HEAD']);
       mergeBase = base.trim();
-      console.log(
+      console.error(
         chalk.gray(
           `Comparing against ${targetBranchRef} (merge-base: ${mergeBase.substring(0, 7)})...`
         )
@@ -387,7 +402,7 @@ export async function runLocalReview(
     }
 
     const diffRange = `${mergeBase}..HEAD`;
-    console.log(chalk.gray(`Analyzing commits from ${mergeBase.substring(0, 7)} to HEAD...`));
+    console.error(chalk.gray(`Analyzing commits from ${mergeBase.substring(0, 7)} to HEAD...`));
 
     // 3. Get Commit Messages with proper delimiter
     const { stdout: logOutput } = await execa('git', ['log', '--pretty=%B---EOC---', diffRange], {
@@ -412,17 +427,17 @@ export async function runLocalReview(
         const ignored = shouldIgnoreFile(file.path, ignorePatterns);
         if (ignored) {
           ignoredCount++;
-          console.log(chalk.gray(`  Ignoring: ${file.path}`));
+          console.error(chalk.gray(`  Ignoring: ${file.path}`));
         }
         return !ignored;
       });
     }
 
     if (ignoredCount > 0) {
-      console.log(chalk.gray(`Ignored ${ignoredCount} file(s) based on patterns\n`));
+      console.error(chalk.gray(`Ignored ${ignoredCount} file(s) based on patterns\n`));
     }
 
-    console.log(chalk.gray(`Collecting diffs for ${filteredFileList.length} file(s)...`));
+    console.error(chalk.gray(`Collecting diffs for ${filteredFileList.length} file(s)...`));
 
     const changedFiles = [];
     for (const file of filteredFileList) {

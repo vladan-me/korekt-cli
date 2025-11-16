@@ -29,13 +29,13 @@ export function setApiKey(key) {
 
 /**
  * Get the API endpoint URL from config or environment
- * Priority: 1) config store, 2) .env file
+ * Priority: 1) config store, 2) .env file, 3) default
  */
 export function getApiEndpoint() {
   const configEndpoint = config.get('apiEndpoint');
   if (configEndpoint) return configEndpoint;
 
-  return process.env.KOREKT_API_ENDPOINT || null;
+  return process.env.KOREKT_API_ENDPOINT || 'https://api.korekt.ai/api/review/local';
 }
 
 /**

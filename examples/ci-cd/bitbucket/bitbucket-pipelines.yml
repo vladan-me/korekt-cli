@@ -1,0 +1,61 @@
+image: node:20
+
+definitions:
+  steps:
+    - step: &korekt-review
+        name: AI Code Review
+        clone:
+          depth: full  # Full git history for accurate diff
+        caches:
+          - node
+        script:
+          - npm install -g korekt-cli
+          - kk config --key "$KOREKT_API_KEY"
+          - echo "Target branch: $BITBUCKET_PR_DESTINATION_BRANCH"
+          - git fetch origin "$BITBUCKET_PR_DESTINATION_BRANCH"
+          - kk review "origin/$BITBUCKET_PR_DESTINATION_BRANCH" --json > results.json
+          - kk get-script bitbucket | bash -s results.json
+        artifacts:
+          - results.json
+
+pipelines:
+  pull-requests:
+    '**':  # Run on all PRs
+      - step: *korekt-review
+
+  # Optional: Review on specific branches
+  branches:
+    feature/**:
+      - step:
+          name: Feature Branch Review
+          clone:
+            depth: full
+          script:
+            - npm install -g korekt-cli
+            - kk config --key "$KOREKT_API_KEY"
+            - kk review origin/develop --json > results.json
+            - |
+              if [ -f results.json ]; then
+                TOTAL=$(jq -r '.data.summary.total_issues // 0' results.json)
+                echo "Review found $TOTAL issue(s)"
+              fi
+          trigger: manual  # Only run when manually triggered
+          artifacts:
+            - results.json
+
+# Alternative configuration for specific target branches only
+# pipelines:
+#   pull-requests:
+#     develop:
+#       - step: *korekt-review
+#     main:
+#       - step: *korekt-review
+
+# Optional: Fail if critical issues found
+# Add this after the review step:
+# - |
+#   CRITICAL=$(jq -r '.data.summary.critical // 0' results.json)
+#   if [ "$CRITICAL" -gt "0" ]; then
+#     echo "Found $CRITICAL critical issue(s)"
+#     exit 1
+#   fi

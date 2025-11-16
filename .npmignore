@@ -4,3 +4,7 @@ src/**/*.test.js
 .env
 .env.example
 .idea/
+
+# Exclude CI/CD examples and GitHub workflows
+examples/
+.github/

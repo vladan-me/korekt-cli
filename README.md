@@ -83,6 +83,9 @@ kk review main --ignore "*.lock" "dist/*"
 # Dry run (preview payload without sending)
 kk review main --dry-run
 
+# Output JSON for CI/CD integration
+kk review main --json
+
 # Review staged changes only
 kk stg
 # Aliases: kk staged, kk cached
@@ -95,6 +98,11 @@ kk all
 
 # Include untracked files
 kk all --untracked
+
+# JSON output works with all review commands
+kk stg --json
+kk diff --json
+kk all --json
 ```
 
 ### Alternative Command
