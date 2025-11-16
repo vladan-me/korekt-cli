@@ -38,14 +38,6 @@ jobs:
       - name: Run AI Code Review
         run: kk review origin/${{ github.base_ref }} --json > results.json
 
-      - name: Upload Results
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: korekt-review-results
-          path: results.json
-          retention-days: 30
-
       - name: Post PR Comment
         if: success()
         env:
