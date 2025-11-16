@@ -484,7 +484,7 @@ fi
 echo "Posting PR status..."
 
 if [ "$CRITICAL_ISSUES" -gt 0 ]; then
-  PR_STATUS="rejected"
+  PR_STATUS="failed"
   STATUS_DESCRIPTION="Found $CRITICAL_ISSUES critical severity issues that must be addressed"
 else
   PR_STATUS="succeeded"
