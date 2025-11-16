@@ -6,6 +6,9 @@ import chalk from 'chalk';
 import readline from 'readline';
 import ora from 'ora';
 import { createRequire } from 'module';
+import { readFileSync } from 'fs';
+import { join, dirname } from 'path';
+import { fileURLToPath } from 'url';
 import { runLocalReview } from './git-logic.js';
 import {
   getApiKey,
@@ -108,6 +111,11 @@ Configuration:
   $ kk config --key YOUR_KEY
   $ kk config --endpoint https://api.korekt.ai/review/local
   $ kk config --ticket-system ado
+
+CI/CD Integration:
+  $ kk get-script github           Output GitHub Actions integration script
+  $ kk get-script bitbucket        Output Bitbucket Pipelines integration script
+  $ kk get-script azure            Output Azure DevOps integration script
 `
   );
 
@@ -484,6 +492,49 @@ program
       console.log('  kk config --endpoint https://api.korekt.ai/review/local');
       console.log('  kk config --ticket-system jira');
       console.log('  kk config --show              (view current configuration)');
+    }
+  });
+
+program
+  .command('get-script <provider>')
+  .description('Output a CI/CD integration script for a specific provider')
+  .addHelpText(
+    'after',
+    `
+Providers:
+  github      GitHub Actions integration script
+  bitbucket   Bitbucket Pipelines integration script
+  azure       Azure DevOps integration script
+
+Usage:
+  kk get-script github | bash -s results.json
+  kk get-script bitbucket > bitbucket.sh && chmod +x bitbucket.sh
+  kk get-script azure > azure.sh
+`
+  )
+  .action((provider) => {
+    const validProviders = ['github', 'bitbucket', 'azure'];
+
+    if (!validProviders.includes(provider.toLowerCase())) {
+      console.error(chalk.red(`Invalid provider: ${provider}`));
+      console.error(chalk.gray(`Valid providers: ${validProviders.join(', ')}`));
+      process.exit(1);
+    }
+
+    try {
+      // Get the directory where this script is located
+      const __filename = fileURLToPath(import.meta.url);
+      const __dirname = dirname(__filename);
+
+      // Build path to the script file
+      const scriptPath = join(__dirname, '..', 'scripts', `${provider.toLowerCase()}.sh`);
+
+      // Read and output the script
+      const scriptContent = readFileSync(scriptPath, 'utf8');
+      output(scriptContent);
+    } catch (error) {
+      console.error(chalk.red(`Failed to read script: ${error.message}`));
+      process.exit(1);
     }
   });
 

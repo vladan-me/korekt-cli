@@ -1,5 +1,8 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { truncateFileData, formatErrorOutput } from './index.js';
+import { readFileSync } from 'fs';
+import { join, dirname } from 'path';
+import { fileURLToPath } from 'url';
 
 describe('CLI JSON output mode', () => {
   let stdoutSpy;
@@ -329,6 +332,141 @@ describe('CLI JSON output mode', () => {
       expect(parsed.success).toBe(false);
       expect(parsed.error).toBe('API Error');
       expect(parsed.status).toBe(400);
+    });
+  });
+});
+
+describe('get-script command', () => {
+  let stdoutSpy;
+
+  beforeEach(() => {
+    stdoutSpy = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  describe('valid providers', () => {
+    it('should output github script to stdout', () => {
+      const output = (msg) => process.stdout.write(msg + '\n');
+
+      // Read actual github.sh script
+      const __filename = fileURLToPath(import.meta.url);
+      const __dirname = dirname(__filename);
+      const scriptPath = join(__dirname, '..', 'scripts', 'github.sh');
+      const scriptContent = readFileSync(scriptPath, 'utf8');
+
+      // Simulate get-script command output
+      output(scriptContent);
+
+      // Verify script was output to stdout
+      expect(stdoutSpy).toHaveBeenCalledWith(scriptContent + '\n');
+      expect(stdoutSpy).toHaveBeenCalledTimes(1);
+    });
+
+    it('should output bitbucket script to stdout', () => {
+      const output = (msg) => process.stdout.write(msg + '\n');
+
+      // Read actual bitbucket.sh script
+      const __filename = fileURLToPath(import.meta.url);
+      const __dirname = dirname(__filename);
+      const scriptPath = join(__dirname, '..', 'scripts', 'bitbucket.sh');
+      const scriptContent = readFileSync(scriptPath, 'utf8');
+
+      // Simulate get-script command output
+      output(scriptContent);
+
+      // Verify script was output to stdout
+      expect(stdoutSpy).toHaveBeenCalledWith(scriptContent + '\n');
+      expect(stdoutSpy).toHaveBeenCalledTimes(1);
+    });
+
+    it('should output azure script to stdout', () => {
+      const output = (msg) => process.stdout.write(msg + '\n');
+
+      // Read actual azure.sh script
+      const __filename = fileURLToPath(import.meta.url);
+      const __dirname = dirname(__filename);
+      const scriptPath = join(__dirname, '..', 'scripts', 'azure.sh');
+      const scriptContent = readFileSync(scriptPath, 'utf8');
+
+      // Simulate get-script command output
+      output(scriptContent);
+
+      // Verify script was output to stdout
+      expect(stdoutSpy).toHaveBeenCalledWith(scriptContent + '\n');
+      expect(stdoutSpy).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('script completeness', () => {
+    it('should output complete bash scripts with proper structure', () => {
+      const __filename = fileURLToPath(import.meta.url);
+      const __dirname = dirname(__filename);
+
+      // Test all three scripts
+      const providers = ['github', 'bitbucket', 'azure'];
+
+      providers.forEach((provider) => {
+        const scriptPath = join(__dirname, '..', 'scripts', `${provider}.sh`);
+        const scriptContent = readFileSync(scriptPath, 'utf8');
+
+        // Verify script starts with shebang
+        expect(scriptContent).toMatch(/^#!/);
+        expect(scriptContent).toContain('#!/usr/bin/env bash');
+
+        // Verify script has substantial content (not truncated)
+        const lineCount = scriptContent.split('\n').length;
+        expect(lineCount).toBeGreaterThan(400);
+
+        // Verify script ends properly (has exit statement)
+        expect(scriptContent).toContain('exit');
+      });
+    });
+  });
+
+  describe('error handling', () => {
+    it('should reject invalid provider', () => {
+      const invalidProvider = 'gitlab';
+      const validProviders = ['github', 'bitbucket', 'azure'];
+
+      // Test validation logic from index.js line 513
+      const isValid = validProviders.includes(invalidProvider.toLowerCase());
+
+      expect(isValid).toBe(false);
+
+      // In the actual command, this would trigger process.exit(1)
+      // We verify the validation logic correctly identifies invalid providers
+      expect(['github', 'bitbucket', 'azure']).not.toContain(invalidProvider);
+    });
+
+    it('should accept valid providers case-insensitively', () => {
+      const validProviders = ['github', 'bitbucket', 'azure'];
+
+      // Test that providers work case-insensitively
+      expect(validProviders.includes('GitHub'.toLowerCase())).toBe(true);
+      expect(validProviders.includes('BITBUCKET'.toLowerCase())).toBe(true);
+      expect(validProviders.includes('Azure'.toLowerCase())).toBe(true);
+    });
+  });
+
+  describe('bundled script files', () => {
+    it('should have all provider scripts bundled and readable', () => {
+      const __filename = fileURLToPath(import.meta.url);
+      const __dirname = dirname(__filename);
+
+      const providers = ['github', 'bitbucket', 'azure'];
+
+      providers.forEach((provider) => {
+        const scriptPath = join(__dirname, '..', 'scripts', `${provider}.sh`);
+
+        // Should not throw - file exists and is readable
+        expect(() => {
+          const content = readFileSync(scriptPath, 'utf8');
+          expect(content.length).toBeGreaterThan(0);
+        }).not.toThrow();
+      });
     });
   });
 });

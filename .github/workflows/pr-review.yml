@@ -1,0 +1,64 @@
+name: AI Code Review on PR
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    branches:
+      - main
+      - master
+      - develop
+
+jobs:
+  korekt-review:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Full git history for accurate diff analysis
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install korekt-cli
+        run: npm install -g korekt-cli
+
+      - name: Configure korekt
+        env:
+          KOREKT_API_KEY: ${{ secrets.KOREKT_API_KEY }}
+        run: kk config --key "$KOREKT_API_KEY"
+
+      - name: Run AI Code Review
+        run: kk review origin/${{ github.base_ref }} --json > results.json
+        continue-on-error: true
+
+      - name: Post PR Comment
+        if: always()
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          COMMIT_HASH: ${{ github.event.pull_request.head.sha }}
+        run: |
+          kk get-script github | bash -s results.json || echo "Failed to post comment"
+
+      - name: Upload Results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: korekt-review-results
+          path: results.json
+          retention-days: 30
+
+      # Optional: Fail if critical issues found
+      # - name: Check for Critical Issues
+      #   if: always()
+      #   run: |
+      #     CRITICAL=$(jq -r '.summary.critical // 0' results.json)
+      #     if [ "$CRITICAL" -gt "0" ]; then
+      #       echo "::error::Found $CRITICAL critical issue(s)"
+      #       exit 1
+      #     fi
