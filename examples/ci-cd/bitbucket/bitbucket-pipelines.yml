@@ -13,8 +13,8 @@ definitions:
           - kk config --key "$KOREKT_API_KEY"
           - echo "Target branch: $BITBUCKET_PR_DESTINATION_BRANCH"
           - git fetch origin "$BITBUCKET_PR_DESTINATION_BRANCH"
-          - kk review "origin/$BITBUCKET_PR_DESTINATION_BRANCH" --json > results.json || true
-          - kk get-script bitbucket | bash -s results.json || echo "Failed to post comment"
+          - kk review "origin/$BITBUCKET_PR_DESTINATION_BRANCH" --json > results.json
+          - kk get-script bitbucket | bash -s results.json
         artifacts:
           - results.json
 
@@ -33,10 +33,10 @@ pipelines:
           script:
             - npm install -g korekt-cli
             - kk config --key "$KOREKT_API_KEY"
-            - kk review origin/develop --json > results.json || true
+            - kk review origin/develop --json > results.json
             - |
               if [ -f results.json ]; then
-                TOTAL=$(jq -r '.summary.total_issues // 0' results.json)
+                TOTAL=$(jq -r '.data.summary.total_issues // 0' results.json)
                 echo "Review found $TOTAL issue(s)"
               fi
           trigger: manual  # Only run when manually triggered
@@ -54,7 +54,7 @@ pipelines:
 # Optional: Fail if critical issues found
 # Add this after the review step:
 # - |
-#   CRITICAL=$(jq -r '.summary.critical // 0' results.json)
+#   CRITICAL=$(jq -r '.data.summary.critical // 0' results.json)
 #   if [ "$CRITICAL" -gt "0" ]; then
 #     echo "Found $CRITICAL critical issue(s)"
 #     exit 1

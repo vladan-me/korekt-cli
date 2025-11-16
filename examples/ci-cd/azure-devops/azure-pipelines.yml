@@ -50,10 +50,9 @@ stages:
               # Run review with JSON output
               kk review "origin/$TARGET_BRANCH" --json > results.json
             displayName: 'Run AI Code Review'
-            continueOnError: true
 
           - script: |
-              kk get-script azure | bash -s results.json || echo "Failed to post comment"
+              kk get-script azure | bash -s results.json
             displayName: 'Post PR Comment'
             condition: and(succeeded(), eq(variables['Build.Reason'], 'PullRequest'))
             env:
@@ -74,7 +73,7 @@ stages:
 
           # Optional: Fail if critical issues found
           # - script: |
-          #     CRITICAL=$(jq -r '.summary.critical // 0' results.json)
+          #     CRITICAL=$(jq -r '.data.summary.critical // 0' results.json)
           #     if [ "$CRITICAL" -gt "0" ]; then
           #       echo "##vso[task.logissue type=error]Found $CRITICAL critical issue(s)"
           #       exit 1

@@ -54,13 +54,13 @@ jobs:
           PR_NUMBER: ${{ github.event.pull_request.number }}
           COMMIT_HASH: ${{ github.event.pull_request.head.sha }}
         run: |
-          kk get-script github | bash -s results.json || echo "Failed to post comment"
+          kk get-script github | bash -s results.json
 
       # Optional: Fail if critical issues found
       # - name: Check for Critical Issues
       #   if: always()
       #   run: |
-      #     CRITICAL=$(jq -r '.summary.critical // 0' results.json)
+      #     CRITICAL=$(jq -r '.data.summary.critical // 0' results.json)
       #     if [ "$CRITICAL" -gt "0" ]; then
       #       echo "::error::Found $CRITICAL critical issue(s)"
       #       exit 1
