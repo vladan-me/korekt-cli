@@ -200,7 +200,7 @@ program
       log(`  Commits: ${chalk.cyan(payload.commit_messages.length)}`);
       log(`  Files: ${chalk.cyan(payload.changed_files.length)}\n`);
 
-      log(chalk.bold('  Files to review:'));
+      log(chalk.bold(`  ${payload.changed_files.length} files to review:`));
       payload.changed_files.forEach((file) => {
         const statusColor =
           {
@@ -364,7 +364,7 @@ async function reviewUncommitted(mode, options) {
   if (!options.json) {
     log(chalk.yellow('\n📋 Ready to submit uncommitted changes for review:\n'));
     log(chalk.gray('  Comparing against HEAD (last commit)\n'));
-    log(chalk.bold('  Files to review:'));
+    log(chalk.bold(`  ${payload.changed_files.length} files to review:`));
     payload.changed_files.forEach((file) => {
       const statusColor =
         {
