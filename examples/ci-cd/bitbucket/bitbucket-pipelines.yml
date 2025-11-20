@@ -1,4 +1,4 @@
-image: node:20
+image: atlassian/default-image:5  # Ubuntu 24.04 with Node.js 22.15.0, jq, git, and other tools
 
 definitions:
   steps:
@@ -11,7 +11,6 @@ definitions:
         script:
           - npm install -g korekt-cli
           - kk config --key "$KOREKT_API_KEY"
-          - echo "Target branch: $BITBUCKET_PR_DESTINATION_BRANCH"
           - git fetch origin "$BITBUCKET_PR_DESTINATION_BRANCH"
           - kk review "origin/$BITBUCKET_PR_DESTINATION_BRANCH" --json > results.json
           - kk get-script bitbucket | bash -s results.json
