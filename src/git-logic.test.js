@@ -6,6 +6,7 @@ import {
   truncateContent,
   normalizeRepoUrl,
   shouldIgnoreFile,
+  getContributors,
 } from './git-logic.js';
 import { execa } from 'execa';
 
@@ -569,5 +570,140 @@ describe('shouldIgnoreFile', () => {
     expect(shouldIgnoreFile('db/migrations/001_init.sql', pattern)).toBe(true);
     expect(shouldIgnoreFile('file.sql', pattern)).toBe(true);
     expect(shouldIgnoreFile('file.js', pattern)).toBe(false);
+  });
+});
+
+describe('getContributors', () => {
+  beforeEach(() => {
+    vi.mock('execa');
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('should extract single contributor with commit count', async () => {
+    vi.mocked(execa).mockImplementation(async (cmd, args) => {
+      const command = [cmd, ...args].join(' ');
+      if (command.includes('log --format=%ae|%an')) {
+        return {
+          stdout: 'john@example.com|John Doe\njohn@example.com|John Doe\njohn@example.com|John Doe',
+        };
+      }
+      throw new Error(`Unmocked command: ${command}`);
+    });
+
+    const result = await getContributors('abc123..HEAD', '/path/to/repo');
+
+    expect(result.author_email).toBe('john@example.com');
+    expect(result.author_name).toBe('John Doe');
+    expect(result.contributors).toHaveLength(1);
+    expect(result.contributors[0]).toEqual({
+      email: 'john@example.com',
+      name: 'John Doe',
+      commits: 3,
+    });
+  });
+
+  it('should identify author as contributor with most commits', async () => {
+    vi.mocked(execa).mockImplementation(async (cmd, args) => {
+      const command = [cmd, ...args].join(' ');
+      if (command.includes('log --format=%ae|%an')) {
+        return {
+          stdout: [
+            'alice@example.com|Alice Smith',
+            'alice@example.com|Alice Smith',
+            'alice@example.com|Alice Smith',
+            'alice@example.com|Alice Smith',
+            'alice@example.com|Alice Smith',
+            'bob@example.com|Bob Jones',
+            'bob@example.com|Bob Jones',
+            'charlie@example.com|Charlie Brown',
+          ].join('\n'),
+        };
+      }
+      throw new Error(`Unmocked command: ${command}`);
+    });
+
+    const result = await getContributors('abc123..HEAD', '/path/to/repo');
+
+    expect(result.author_email).toBe('alice@example.com');
+    expect(result.author_name).toBe('Alice Smith');
+    expect(result.contributors).toHaveLength(3);
+    expect(result.contributors[0].commits).toBe(5); // Alice - most commits
+    expect(result.contributors[1].commits).toBe(2); // Bob
+    expect(result.contributors[2].commits).toBe(1); // Charlie
+  });
+
+  it('should handle empty commit range', async () => {
+    vi.mocked(execa).mockImplementation(async (cmd, args) => {
+      const command = [cmd, ...args].join(' ');
+      if (command.includes('log --format=%ae|%an')) {
+        return { stdout: '' };
+      }
+      throw new Error(`Unmocked command: ${command}`);
+    });
+
+    const result = await getContributors('abc123..HEAD', '/path/to/repo');
+
+    expect(result.author_email).toBeNull();
+    expect(result.author_name).toBeNull();
+    expect(result.contributors).toEqual([]);
+  });
+
+  it('should handle git command errors gracefully', async () => {
+    vi.mocked(execa).mockImplementation(async () => {
+      throw new Error('Git error');
+    });
+
+    const result = await getContributors('abc123..HEAD', '/path/to/repo');
+
+    expect(result.author_email).toBeNull();
+    expect(result.author_name).toBeNull();
+    expect(result.contributors).toEqual([]);
+  });
+
+  it('should handle missing name in git log', async () => {
+    vi.mocked(execa).mockImplementation(async (cmd, args) => {
+      const command = [cmd, ...args].join(' ');
+      if (command.includes('log --format=%ae|%an')) {
+        return { stdout: 'user@example.com|' };
+      }
+      throw new Error(`Unmocked command: ${command}`);
+    });
+
+    const result = await getContributors('abc123..HEAD', '/path/to/repo');
+
+    expect(result.author_email).toBe('user@example.com');
+    expect(result.author_name).toBe('user@example.com'); // Falls back to email
+    expect(result.contributors[0].name).toBe('user@example.com');
+  });
+
+  it('should sort contributors by commit count descending', async () => {
+    vi.mocked(execa).mockImplementation(async (cmd, args) => {
+      const command = [cmd, ...args].join(' ');
+      if (command.includes('log --format=%ae|%an')) {
+        return {
+          stdout: [
+            'c@example.com|C User',
+            'a@example.com|A User',
+            'a@example.com|A User',
+            'a@example.com|A User',
+            'b@example.com|B User',
+            'b@example.com|B User',
+          ].join('\n'),
+        };
+      }
+      throw new Error(`Unmocked command: ${command}`);
+    });
+
+    const result = await getContributors('abc123..HEAD', '/path/to/repo');
+
+    expect(result.contributors[0].email).toBe('a@example.com');
+    expect(result.contributors[0].commits).toBe(3);
+    expect(result.contributors[1].email).toBe('b@example.com');
+    expect(result.contributors[1].commits).toBe(2);
+    expect(result.contributors[2].email).toBe('c@example.com');
+    expect(result.contributors[2].commits).toBe(1);
   });
 });

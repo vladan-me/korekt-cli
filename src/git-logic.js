@@ -281,6 +281,55 @@ export async function runUncommittedReview(
 }
 
 /**
+ * Extract contributors from git commits in a range
+ * Returns the author (most commits) and full list of contributors
+ * @param {string} diffRange - The git range to analyze (e.g., "abc123..HEAD")
+ * @param {string} repoRootPath - The repository root directory
+ * @returns {Object} - { author_email, author_name, contributors[] }
+ */
+export async function getContributors(diffRange, repoRootPath) {
+  try {
+    // Get all commit authors with email and name
+    const { stdout: authorOutput } = await execa('git', ['log', '--format=%ae|%an', diffRange], {
+      cwd: repoRootPath,
+    });
+
+    if (!authorOutput.trim()) {
+      return { author_email: null, author_name: null, contributors: [] };
+    }
+
+    const lines = authorOutput.trim().split('\n').filter(Boolean);
+
+    // Count commits per email and track name
+    const contributorMap = new Map();
+    for (const line of lines) {
+      const [email, name] = line.split('|');
+      if (!email) continue;
+
+      if (!contributorMap.has(email)) {
+        contributorMap.set(email, { email, name: name || email, commits: 0 });
+      }
+      contributorMap.get(email).commits++;
+    }
+
+    // Convert to array and sort by commits (descending)
+    const contributors = Array.from(contributorMap.values()).sort((a, b) => b.commits - a.commits);
+
+    // Author = most commits
+    const author = contributors[0] || null;
+
+    return {
+      author_email: author?.email || null,
+      author_name: author?.name || null,
+      contributors,
+    };
+  } catch (error) {
+    console.warn(chalk.yellow('Could not extract contributors:'), error.message);
+    return { author_email: null, author_name: null, contributors: [] };
+  }
+}
+
+/**
  * Main function to analyze local git changes and prepare review payload
  * @param {string|null} targetBranch - The branch to compare against. If null, uses git reflog to find fork point.
  * @param {string|null} ticketSystem - The ticket system to use (jira or ado), or null to skip ticket extraction
@@ -486,12 +535,21 @@ export async function runLocalReview(
       });
     }
 
-    // 5. Assemble the final payload
+    // 5. Get contributors from commits
+    const { author_email, author_name, contributors } = await getContributors(
+      diffRange,
+      repoRootPath
+    );
+
+    // 6. Assemble the final payload
     return {
       repo_url: normalizeRepoUrl(repoUrl.trim()),
       commit_messages: commitMessages,
       changed_files: changedFiles,
       source_branch: branchName,
+      author_email,
+      author_name,
+      contributors,
     };
   } catch (error) {
     console.error(chalk.red('Failed to run local review analysis:'), error.message);
