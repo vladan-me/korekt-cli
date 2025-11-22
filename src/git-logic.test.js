@@ -347,7 +347,7 @@ describe('runLocalReview - fork point detection', () => {
       throw new Error(`Unmocked command: ${command}`);
     });
 
-    const result = await runLocalReview(null, 'jira');
+    const result = await runLocalReview(null);
 
     expect(result).toBeDefined();
     expect(result.source_branch).toBe('feature-branch');
@@ -397,7 +397,7 @@ describe('runLocalReview - fork point detection', () => {
       throw new Error(`Unmocked command: ${command}`);
     });
 
-    const result = await runLocalReview('main', 'jira');
+    const result = await runLocalReview('main');
 
     expect(result).toBeDefined();
 

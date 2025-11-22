@@ -138,14 +138,10 @@ export function parseNameStatus(output) {
 /**
  * Analyze uncommitted changes (staged, unstaged, or all)
  * @param {string} mode - 'staged', 'unstaged', or 'all'
- * @param {string|null} ticketSystem - The ticket system to use (jira or ado), or null to skip ticket extraction
+ * @param {boolean} includeUntracked - Whether to include untracked files
  * @returns {Object|null} - The payload object ready for API submission, or null on error
  */
-export async function runUncommittedReview(
-  mode = 'all',
-  _ticketSystem = null,
-  includeUntracked = false
-) {
+export async function runUncommittedReview(mode = 'all', includeUntracked = false) {
   try {
     // 1. Get Repo URL, current branch name, and repository root
     const { stdout: repoUrl } = await execa('git', ['remote', 'get-url', 'origin']);
@@ -332,15 +328,10 @@ export async function getContributors(diffRange, repoRootPath) {
 /**
  * Main function to analyze local git changes and prepare review payload
  * @param {string|null} targetBranch - The branch to compare against. If null, uses git reflog to find fork point.
- * @param {string|null} ticketSystem - The ticket system to use (jira or ado), or null to skip ticket extraction
  * @param {string[]|null} ignorePatterns - Array of glob patterns to ignore files
  * @returns {Object|null} - The payload object ready for API submission, or null on error
  */
-export async function runLocalReview(
-  targetBranch = null,
-  _ticketSystem = null,
-  ignorePatterns = null
-) {
+export async function runLocalReview(targetBranch = null, ignorePatterns = null) {
   try {
     // 1. Get Repo URL, current branch name, and repository root
     const { stdout: repoUrl } = await execa('git', ['remote', 'get-url', 'origin']);

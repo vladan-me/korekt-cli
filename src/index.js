@@ -10,14 +10,7 @@ import { readFileSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { runLocalReview } from './git-logic.js';
-import {
-  getApiKey,
-  setApiKey,
-  getApiEndpoint,
-  setApiEndpoint,
-  getTicketSystem,
-  setTicketSystem,
-} from './config.js';
+import { getApiKey, setApiKey, getApiEndpoint, setApiEndpoint } from './config.js';
 import { formatReviewOutput } from './formatter.js';
 
 const require = createRequire(import.meta.url);
@@ -105,12 +98,10 @@ Examples:
 Common Options:
   --dry-run                        Show payload without sending to API
   --json                           Output raw API response as JSON
-  --ticket-system <system>         Use specific ticket system (jira or ado)
 
 Configuration:
   $ kk config --key YOUR_KEY
-  $ kk config --endpoint https://api.korekt.ai/review/local
-  $ kk config --ticket-system ado
+  $ kk config --endpoint https://api.korekt.ai/api/review
 
 CI/CD Integration:
   $ kk get-script github           Output GitHub Actions integration script
@@ -126,7 +117,6 @@ program
     '[target-branch]',
     'The branch to compare against (e.g., main, develop). If not specified, auto-detects fork point.'
   )
-  .option('--ticket-system <system>', 'Ticket system to use (jira or ado)')
   .option('--dry-run', 'Show payload without sending to API')
   .option(
     '--ignore <patterns...>',
@@ -153,28 +143,12 @@ program
       process.exit(1);
     }
 
-    // Determine ticket system to use (or null if not configured)
-    const ticketSystem = options.ticketSystem || getTicketSystem() || null;
-
-    // Validate ticket system
-    if (ticketSystem && !['jira', 'ado'].includes(ticketSystem.toLowerCase())) {
-      log(chalk.red(`Invalid ticket system: ${ticketSystem}`));
-      log(chalk.gray('Valid options: jira, ado'));
-      process.exit(1);
-    }
-
     // Gather all data using our git logic module
-    const payload = await runLocalReview(targetBranch, ticketSystem, options.ignore);
+    const payload = await runLocalReview(targetBranch, options.ignore);
 
     if (!payload) {
       log(chalk.red('Could not proceed with review due to errors during analysis.'));
       process.exit(1);
-    }
-
-    // Add ticket system to payload if specified
-    if (ticketSystem) {
-      payload.ticket_system = ticketSystem;
-      log(chalk.gray(`Using ticket system: ${ticketSystem}`));
     }
 
     // If dry-run, just show the payload and exit
@@ -276,7 +250,6 @@ program
   .command('review-staged')
   .aliases(['stg', 'staged', 'cached'])
   .description('Review staged changes (git diff --cached)')
-  .option('--ticket-system <system>', 'Ticket system to use (jira or ado)')
   .option('--dry-run', 'Show payload without sending to API')
   .option('--json', 'Output raw API response as JSON')
   .action(async (options) => {
@@ -288,7 +261,6 @@ program
   .command('review-unstaged')
   .alias('diff')
   .description('Review unstaged changes (git diff)')
-  .option('--ticket-system <system>', 'Ticket system to use (jira or ado)')
   .option('--dry-run', 'Show payload without sending to API')
   .option('--untracked', 'Include untracked files in the review')
   .option('--json', 'Output raw API response as JSON')
@@ -301,7 +273,6 @@ program
   .command('review-all-uncommitted')
   .alias('all')
   .description('Review all uncommitted changes (staged + unstaged)')
-  .option('--ticket-system <system>', 'Ticket system to use (jira or ado)')
   .option('--dry-run', 'Show payload without sending to API')
   .option('--untracked', 'Include untracked files in the review')
   .option('--json', 'Output raw API response as JSON')
@@ -325,25 +296,12 @@ async function reviewUncommitted(mode, options) {
     process.exit(1);
   }
 
-  const ticketSystem = options.ticketSystem || getTicketSystem() || null;
-
-  if (ticketSystem && !['jira', 'ado'].includes(ticketSystem.toLowerCase())) {
-    log(chalk.red(`Invalid ticket system: ${ticketSystem}`));
-    log(chalk.gray('Valid options: jira, ado'));
-    process.exit(1);
-  }
-
   const { runUncommittedReview } = await import('./git-logic.js');
-  const payload = await runUncommittedReview(mode, ticketSystem, options.untracked);
+  const payload = await runUncommittedReview(mode, options.untracked);
 
   if (!payload) {
     log(chalk.red('No changes found or error occurred during analysis.'));
     process.exit(1);
-  }
-
-  if (ticketSystem) {
-    payload.ticket_system = ticketSystem;
-    log(chalk.gray(`Using ticket system: ${ticketSystem}`));
   }
 
   if (options.dryRun) {
@@ -440,22 +398,17 @@ program
   .description('Configure API settings')
   .option('--key <key>', 'Your API key')
   .option('--endpoint <endpoint>', 'Your API endpoint URL')
-  .option('--ticket-system <system>', 'Ticket system (jira, ado)')
   .option('--show', 'Show current configuration')
   .action((options) => {
     // Show current config if --show flag is used
     if (options.show) {
       const apiKey = getApiKey();
       const apiEndpoint = getApiEndpoint();
-      const ticketSystem = getTicketSystem();
 
       console.log(chalk.bold('\nCurrent Configuration:\n'));
       console.log(`  API Key: ${apiKey ? chalk.green('✓ Set') : chalk.red('✗ Not set')}`);
       console.log(
-        `  API Endpoint: ${apiEndpoint ? chalk.cyan(apiEndpoint) : chalk.red('✗ Not set')}`
-      );
-      console.log(
-        `  Ticket System: ${ticketSystem ? chalk.cyan(ticketSystem) : chalk.gray('Not configured')}\n`
+        `  API Endpoint: ${apiEndpoint ? chalk.cyan(apiEndpoint) : chalk.red('✗ Not set')}\n`
       );
       return;
     }
@@ -476,29 +429,11 @@ program
       setApiEndpoint(options.endpoint);
       console.log(chalk.green('✓ API Endpoint saved successfully!'));
     }
-    if (options.ticketSystem !== undefined) {
-      if (options.ticketSystem === '') {
-        // Clear ticket system
-        setTicketSystem(null);
-        console.log(chalk.green('✓ Ticket System cleared!'));
-      } else {
-        // Validate ticket system
-        const validSystems = ['jira', 'ado'];
-        if (!validSystems.includes(options.ticketSystem.toLowerCase())) {
-          console.error(chalk.red(`Invalid ticket system: ${options.ticketSystem}`));
-          console.error(chalk.gray(`Valid options: ${validSystems.join(', ')}`));
-          return;
-        }
-        setTicketSystem(options.ticketSystem);
-        console.log(chalk.green('✓ Ticket System saved successfully!'));
-      }
-    }
-    if (!options.key && !options.endpoint && options.ticketSystem === undefined && !options.show) {
+    if (!options.key && !options.endpoint && !options.show) {
       console.log(chalk.yellow('Please provide at least one configuration option.'));
       console.log('\nUsage:');
       console.log('  kk config --key YOUR_API_KEY');
-      console.log('  kk config --endpoint https://api.korekt.ai/review/local');
-      console.log('  kk config --ticket-system jira');
+      console.log('  kk config --endpoint https://api.korekt.ai/api/review');
       console.log('  kk config --show              (view current configuration)');
     }
   });

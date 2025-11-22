@@ -12,7 +12,7 @@ AI-powered code review CLI - Keep your kode korekt
 
 *   **AI-Powered Analysis**: Get instant, intelligent code reviews with severity levels, categories, and actionable suggestions
 *   **Local Git Integration**: Works with committed changes, staged changes, and unstaged modifications
-*   **Ticket System Integration**: Automatically extracts ticket IDs from branch names and commit messages (Jira & Azure DevOps)
+*   **Ticket Context Enrichment**: Server-side ticket extraction from branch names and commit messages (Jira & Azure DevOps)
 *   **Beautiful Output**: Color-coded issues with severity indicators, file locations, and suggested fixes
 *   **Ultra-Fast**: Short command syntax (`kk`) for maximum developer efficiency
 
@@ -28,7 +28,7 @@ Configure the CLI with your API credentials:
 
 ```bash
 kk config --key YOUR_API_KEY
-kk config --endpoint https://api.korekt.ai/review/local
+kk config --endpoint https://api.korekt.ai/api/review
 ```
 
 Run your first review:
@@ -56,10 +56,7 @@ kk all
 kk config --key YOUR_API_KEY
 
 # Set API endpoint
-kk config --endpoint https://api.korekt.ai/review/local
-
-# Set default ticket system (jira or ado)
-kk config --ticket-system jira
+kk config --endpoint https://api.korekt.ai/api/review
 
 # Show current configuration
 kk config --show
@@ -73,9 +70,6 @@ kk review
 
 # Review against specific branch
 kk review main
-
-# Review with ticket system override
-kk review main --ticket-system ado
 
 # Review with ignored files
 kk review main --ignore "*.lock" "dist/*"
@@ -119,8 +113,7 @@ You can also configure using environment variables:
 
 ```bash
 export KOREKT_API_KEY="your-api-key"
-export KOREKT_API_ENDPOINT="https://api.korekt.ai/review/local"
-export KOREKT_TICKET_SYSTEM="jira"
+export KOREKT_API_ENDPOINT="https://api.korekt.ai/api/review"
 ```
 
 Note: Config file takes precedence over environment variables.

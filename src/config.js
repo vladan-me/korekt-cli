@@ -46,30 +46,11 @@ export function setApiEndpoint(endpoint) {
 }
 
 /**
- * Get the ticket system from config or environment
- * Priority: 1) config store, 2) .env file
- */
-export function getTicketSystem() {
-  const configTicketSystem = config.get('ticketSystem');
-  if (configTicketSystem) return configTicketSystem;
-
-  return process.env.KOREKT_TICKET_SYSTEM || null;
-}
-
-/**
- * Set the ticket system in config store
- */
-export function setTicketSystem(system) {
-  config.set('ticketSystem', system);
-}
-
-/**
  * Get all configuration
  */
 export function getConfig() {
   return {
     apiKey: getApiKey(),
     apiEndpoint: getApiEndpoint(),
-    ticketSystem: getTicketSystem(),
   };
 }
