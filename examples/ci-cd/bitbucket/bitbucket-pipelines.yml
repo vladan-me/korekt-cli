@@ -1,5 +1,9 @@
 image: atlassian/default-image:5  # Ubuntu 24.04 with Node.js 22.15.0, jq, git, and other tools
 
+# Required Repository Variables (Settings → Repository variables):
+#   KOREKT_API_KEY - Your Korekt API key
+#   BITBUCKET_ACCESS_TOKEN - App password with PR write permissions
+
 definitions:
   steps:
     - step: &korekt-review

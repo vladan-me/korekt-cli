@@ -1,3 +1,6 @@
+# Required Pipeline Variables (Pipelines → Edit → Variables):
+#   KOREKT_API_KEY - Your Korekt API key (set as secret)
+
 trigger:
   branches:
     exclude:
