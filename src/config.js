@@ -35,7 +35,7 @@ export function getApiEndpoint() {
   const configEndpoint = config.get('apiEndpoint');
   if (configEndpoint) return configEndpoint;
 
-  return process.env.KOREKT_API_ENDPOINT || 'https://api.korekt.ai/api/review/local';
+  return process.env.KOREKT_API_ENDPOINT || 'https://api.korekt.ai/api/review';
 }
 
 /**
