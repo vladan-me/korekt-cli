@@ -187,6 +187,7 @@ program
   )
   .option('--json', 'Output raw API response as JSON')
   .option('--comment', 'Post review results as PR comments (auto-detects CI provider)')
+  .option('--post-ticket', 'Post review results to linked ticket (e.g., JIRA)')
   .action(async (targetBranch, options) => {
     const reviewTarget = targetBranch ? `against '${targetBranch}'` : '(auto-detecting fork point)';
 
@@ -268,6 +269,11 @@ program
       const elapsed = Math.floor((Date.now() - startTime) / 1000);
       spinner.text = `Submitting review to the AI... ${elapsed}s`;
     }, 1000);
+
+    // Add post_to_ticket flag if requested
+    if (options.postTicket) {
+      payload.post_to_ticket = true;
+    }
 
     try {
       const response = await axios.post(apiEndpoint, payload, {
