@@ -127,49 +127,6 @@ describe('runUncommittedReview', () => {
     expect(result.changed_files).toHaveLength(1);
   });
 
-  it('should analyze all uncommitted changes', async () => {
-    vi.mocked(execa).mockImplementation(async (cmd, args) => {
-      const command = [cmd, ...args].join(' ');
-
-      if (command.includes('remote get-url origin')) {
-        return { stdout: 'https://github.com/user/repo.git' };
-      }
-      if (command.includes('rev-parse --abbrev-ref HEAD')) {
-        return { stdout: 'feature-branch' };
-      }
-      if (command.includes('rev-parse --show-toplevel')) {
-        return { stdout: '/fake/repo/path' };
-      }
-      if (command.includes('diff --cached --name-status')) {
-        return { stdout: 'M\tstaged.js' };
-      }
-      if (command === 'git diff --name-status') {
-        return { stdout: 'M\tunstaged.js' };
-      }
-      if (command.includes('diff --cached -U15 -- staged.js')) {
-        return { stdout: 'diff staged' };
-      }
-      if (command.includes('diff -U15 -- unstaged.js')) {
-        return { stdout: 'diff unstaged' };
-      }
-      if (command.includes('show HEAD:staged.js')) {
-        return { stdout: 'staged old content' };
-      }
-      if (command.includes('show HEAD:unstaged.js')) {
-        return { stdout: 'unstaged old content' };
-      }
-
-      throw new Error(`Unmocked command: ${command}`);
-    });
-
-    const result = await runUncommittedReview('all');
-
-    expect(result).toBeDefined();
-    expect(result.changed_files).toHaveLength(2);
-    expect(result.changed_files[0].path).toBe('staged.js');
-    expect(result.changed_files[1].path).toBe('unstaged.js');
-  });
-
   it('should return null when no changes found', async () => {
     vi.mocked(execa).mockImplementation(async (cmd, args) => {
       const command = [cmd, ...args].join(' ');
@@ -193,7 +150,7 @@ describe('runUncommittedReview', () => {
       throw new Error(`Unmocked command: ${command}`);
     });
 
-    const result = await runUncommittedReview('all');
+    const result = await runUncommittedReview('staged');
 
     expect(result).toBeNull();
   });

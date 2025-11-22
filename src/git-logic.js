@@ -134,11 +134,11 @@ export function parseNameStatus(output) {
 }
 
 /**
- * Analyze uncommitted changes (staged, unstaged, or all)
- * @param {string} mode - 'staged', 'unstaged', or 'all'
+ * Analyze uncommitted changes (staged or unstaged)
+ * @param {string} mode - 'staged' or 'unstaged'
  * @returns {Object|null} - The payload object ready for API submission, or null on error
  */
-export async function runUncommittedReview(mode = 'all') {
+export async function runUncommittedReview(mode = 'unstaged') {
   try {
     // 1. Get Repo URL, current branch name, and repository root
     const { stdout: repoUrl } = await execa('git', ['remote', 'get-url', 'origin']);
@@ -160,15 +160,9 @@ export async function runUncommittedReview(mode = 'all') {
     if (mode === 'staged') {
       nameStatusOutput = await git('diff', '--cached', '--name-status');
       console.error(chalk.gray('Analyzing staged changes...'));
-    } else if (mode === 'unstaged') {
+    } else {
       nameStatusOutput = await git('diff', '--name-status');
       console.error(chalk.gray('Analyzing unstaged changes...'));
-    } else {
-      // mode === 'all': combine staged and unstaged
-      const staged = await git('diff', '--cached', '--name-status');
-      const unstaged = await git('diff', '--name-status');
-      nameStatusOutput = [staged, unstaged].filter(Boolean).join('\n');
-      console.error(chalk.gray('Analyzing all uncommitted changes...'));
     }
 
     const fileList = parseNameStatus(nameStatusOutput);
@@ -181,18 +175,8 @@ export async function runUncommittedReview(mode = 'all') {
       let diff;
       if (mode === 'staged') {
         diff = await git('diff', '--cached', '-U15', '--', path);
-      } else if (mode === 'unstaged') {
-        diff = await git('diff', '-U15', '--', path);
       } else {
-        // For 'all', try staged first, then unstaged
-        try {
-          diff = await git('diff', '--cached', '-U15', '--', path);
-          if (!diff) {
-            diff = await git('diff', '-U15', '--', path);
-          }
-        } catch {
-          diff = await git('diff', '-U15', '--', path);
-        }
+        diff = await git('diff', '-U15', '--', path);
       }
 
       // Get current content from HEAD (before changes)

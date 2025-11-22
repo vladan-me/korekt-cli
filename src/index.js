@@ -92,7 +92,6 @@ Examples:
   $ kk review main                 Review changes against main branch
   $ kk stg --dry-run               Preview staged changes review
   $ kk diff                        Review unstaged changes
-  $ kk all                         Review all uncommitted changes
   $ kk review main --json          Output raw JSON (for CI/CD integration)
 
 Common Options:
@@ -266,17 +265,6 @@ program
   .action(async (options) => {
     log(chalk.blue.bold('🚀 Reviewing unstaged changes...'));
     await reviewUncommitted('unstaged', options);
-  });
-
-program
-  .command('review-all-uncommitted')
-  .alias('all')
-  .description('Review all uncommitted changes (staged + unstaged)')
-  .option('--dry-run', 'Show payload without sending to API')
-  .option('--json', 'Output raw API response as JSON')
-  .action(async (options) => {
-    log(chalk.blue.bold('🚀 Reviewing all uncommitted changes...'));
-    await reviewUncommitted('all', options);
   });
 
 async function reviewUncommitted(mode, options) {

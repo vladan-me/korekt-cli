@@ -43,8 +43,7 @@ kk stg
 # Review only unstaged changes
 kk diff
 
-# Review all uncommitted changes (staged + unstaged)
-kk all
+
 ```
 
 ## Usage
@@ -87,13 +86,9 @@ kk stg
 # Review unstaged changes only
 kk diff
 
-# Review all uncommitted changes
-kk all
-
 # JSON output works with all review commands
 kk stg --json
 kk diff --json
-kk all --json
 ```
 
 ### Alternative Command
