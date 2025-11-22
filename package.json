@@ -1,6 +1,6 @@
 {
   "name": "korekt-cli",
-  "version": "0.8.1",
+  "version": "0.8.2",
   "description": "AI-powered code review CLI - Keep your kode korekt",
   "main": "src/index.js",
   "bin": {
