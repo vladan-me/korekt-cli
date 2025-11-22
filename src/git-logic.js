@@ -400,9 +400,11 @@ export async function runLocalReview(targetBranch = null, ignorePatterns = null)
     console.error(chalk.gray(`Analyzing commits from ${mergeBase.substring(0, 7)} to HEAD...`));
 
     // 3. Get Commit Messages with proper delimiter
-    const { stdout: logOutput } = await execa('git', ['log', '--pretty=%B---EOC---', diffRange], {
-      cwd: repoRootPath,
-    });
+    const { stdout: logOutput } = await execa(
+      'git',
+      ['log', '--no-merges', '--pretty=%B---EOC---', diffRange],
+      { cwd: repoRootPath }
+    );
     const commitMessages = logOutput
       .split('---EOC---')
       .map((msg) => msg.trim())

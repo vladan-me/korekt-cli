@@ -288,7 +288,10 @@ describe('runLocalReview - fork point detection', () => {
             'abc123def456 feature-branch@{0}: commit: latest\nfedcba654321 feature-branch@{1}: commit: middle\n510572bc5197788770004d0d0585822adab0128f feature-branch@{2}: branch: Created from master',
         };
       }
-      if (command.includes('log --pretty=%B---EOC---') && command.includes('510572bc')) {
+      if (
+        command.includes('log --no-merges --pretty=%B---EOC---') &&
+        command.includes('510572bc')
+      ) {
         return { stdout: 'feat: add feature---EOC---' };
       }
       if (command.includes('diff --name-status') && command.includes('510572bc')) {
@@ -338,7 +341,7 @@ describe('runLocalReview - fork point detection', () => {
       if (command.includes('merge-base origin/main HEAD')) {
         return { stdout: 'abc123' };
       }
-      if (command.includes('log --pretty=%B---EOC---')) {
+      if (command.includes('log --no-merges --pretty=%B---EOC---')) {
         return { stdout: 'feat: add feature---EOC---' };
       }
       if (command.includes('diff --name-status')) {
