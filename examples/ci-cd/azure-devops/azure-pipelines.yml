@@ -35,11 +35,6 @@ stages:
           - script: npm install -g korekt-cli
             displayName: 'Install korekt-cli'
 
-          - script: kk config --key "$(KOREKT_API_KEY)"
-            displayName: 'Configure korekt'
-            env:
-              KOREKT_API_KEY: $(KOREKT_API_KEY)
-
           - script: |
               echo "Target branch: $(System.PullRequest.TargetBranch)"
               # Remove 'refs/heads/' prefix from branch name
@@ -47,36 +42,15 @@ stages:
               echo "Cleaned target branch: $TARGET_BRANCH"
               # Fetch target branch explicitly
               git fetch origin "$TARGET_BRANCH"
-              # Run review with JSON output
-              kk review "origin/$TARGET_BRANCH" --json > results.json
+              # Run review and post comments
+              kk review "origin/$TARGET_BRANCH" --comment
             displayName: 'Run AI Code Review'
-
-          - script: |
-              kk get-script azure | bash -s results.json
-            displayName: 'Post PR Comment'
-            condition: and(succeeded(), eq(variables['Build.Reason'], 'PullRequest'))
+            condition: eq(variables['Build.Reason'], 'PullRequest')
             env:
+              KOREKT_API_KEY: $(KOREKT_API_KEY)
               SYSTEM_ACCESSTOKEN: $(System.AccessToken)
               SYSTEM_TEAMFOUNDATIONCOLLECTIONURI: $(System.TeamFoundationCollectionUri)
               SYSTEM_TEAMPROJECT: $(System.TeamProject)
               BUILD_REPOSITORY_ID: $(Build.Repository.ID)
               SYSTEM_PULLREQUEST_PULLREQUESTID: $(System.PullRequest.PullRequestId)
               BUILD_BUILDID: $(Build.BuildId)
-
-          - task: PublishBuildArtifacts@1
-            displayName: 'Upload Review Results'
-            condition: always()
-            inputs:
-              PathtoPublish: 'results.json'
-              ArtifactName: 'korekt-review-results'
-              publishLocation: 'Container'
-
-          # Optional: Fail if critical issues found
-          # - script: |
-          #     CRITICAL=$(jq -r '.data.summary.critical // 0' results.json)
-          #     if [ "$CRITICAL" -gt "0" ]; then
-          #       echo "##vso[task.logissue type=error]Found $CRITICAL critical issue(s)"
-          #       exit 1
-          #     fi
-          #   displayName: 'Check for Critical Issues'
-          #   condition: always()

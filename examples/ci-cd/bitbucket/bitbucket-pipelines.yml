@@ -10,19 +10,15 @@ definitions:
           - node
         script:
           - npm install -g korekt-cli
-          - kk config --key "$KOREKT_API_KEY"
           - git fetch origin "$BITBUCKET_PR_DESTINATION_BRANCH"
-          - kk review "origin/$BITBUCKET_PR_DESTINATION_BRANCH" --json > results.json
-          - kk get-script bitbucket | bash -s results.json
-        artifacts:
-          - results.json
+          - kk review "origin/$BITBUCKET_PR_DESTINATION_BRANCH" --comment
 
 pipelines:
   pull-requests:
     '**':  # Run on all PRs
       - step: *korekt-review
 
-  # Optional: Review on specific branches
+  # Optional: Review on specific branches (non-PR, no comments posted)
   branches:
     feature/**:
       - step:
@@ -31,7 +27,6 @@ pipelines:
             depth: full
           script:
             - npm install -g korekt-cli
-            - kk config --key "$KOREKT_API_KEY"
             - kk review origin/develop --json > results.json
             - |
               if [ -f results.json ]; then
@@ -49,12 +44,3 @@ pipelines:
 #       - step: *korekt-review
 #     main:
 #       - step: *korekt-review
-
-# Optional: Fail if critical issues found
-# Add this after the review step:
-# - |
-#   CRITICAL=$(jq -r '.data.summary.critical // 0' results.json)
-#   if [ "$CRITICAL" -gt "0" ]; then
-#     echo "Found $CRITICAL critical issue(s)"
-#     exit 1
-#   fi

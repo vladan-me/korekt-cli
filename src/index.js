@@ -6,9 +6,11 @@ import chalk from 'chalk';
 import readline from 'readline';
 import ora from 'ora';
 import { createRequire } from 'module';
-import { readFileSync } from 'fs';
-import { join, dirname } from 'path';
+import { writeFileSync, mkdtempSync, rmSync } from 'fs';
+import { join, dirname, resolve } from 'path';
 import { fileURLToPath } from 'url';
+import { spawn } from 'child_process';
+import { tmpdir } from 'os';
 import { runLocalReview } from './git-logic.js';
 import { getApiKey, setApiKey, getApiEndpoint, setApiEndpoint } from './config.js';
 import { formatReviewOutput } from './formatter.js';
@@ -71,11 +73,76 @@ async function confirmAction(message) {
     output: process.stdout,
   });
 
-  return new Promise((resolve) => {
+  return new Promise((resolvePromise) => {
     rl.question(message, (answer) => {
       rl.close();
       // Default to 'yes' if the user just presses Enter
-      resolve(answer.toLowerCase() === 'y' || answer.toLowerCase() === 'yes' || answer === '');
+      resolvePromise(
+        answer.toLowerCase() === 'y' || answer.toLowerCase() === 'yes' || answer === ''
+      );
+    });
+  });
+}
+
+/**
+ * Detect CI provider from environment variables
+ * @returns {string|null} Provider name or null if not detected
+ */
+export function detectCIProvider() {
+  if (process.env.GITHUB_TOKEN && process.env.GITHUB_REPOSITORY) {
+    return 'github';
+  }
+  if (process.env.SYSTEM_ACCESSTOKEN && process.env.SYSTEM_PULLREQUEST_PULLREQUESTID) {
+    return 'azure';
+  }
+  if (process.env.BITBUCKET_REPO_SLUG && process.env.BITBUCKET_PR_ID) {
+    return 'bitbucket';
+  }
+  return null;
+}
+
+/**
+ * Run the CI integration script to post comments
+ * @param {string} provider - CI provider (github, azure, bitbucket)
+ * @param {Object} results - Review results from API
+ * @returns {Promise<void>}
+ */
+async function runCIScript(provider, results) {
+  const __filename = fileURLToPath(import.meta.url);
+  const __dirname = dirname(__filename);
+  const scriptPath = resolve(__dirname, '..', 'scripts', `${provider}.sh`);
+
+  // Create secure temp directory and write results
+  const tempDir = mkdtempSync(join(tmpdir(), 'korekt-'));
+  const tempFile = join(tempDir, 'results.json');
+  writeFileSync(tempFile, JSON.stringify(results, null, 2));
+
+  return new Promise((resolvePromise, reject) => {
+    const cleanup = () => {
+      try {
+        rmSync(tempDir, { recursive: true, force: true });
+      } catch (err) {
+        log(chalk.yellow(`Warning: Failed to clean up temp directory: ${err.message}`));
+      }
+    };
+
+    const child = spawn('bash', [scriptPath, tempFile], {
+      stdio: 'inherit',
+      env: process.env,
+    });
+
+    child.on('close', (code) => {
+      cleanup();
+      if (code === 0) {
+        resolvePromise();
+      } else {
+        reject(new Error(`CI script exited with code ${code}`));
+      }
+    });
+
+    child.on('error', (err) => {
+      cleanup();
+      reject(err);
     });
   });
 }
@@ -93,19 +160,16 @@ Examples:
   $ kk stg --dry-run               Preview staged changes review
   $ kk diff                        Review unstaged changes
   $ kk review main --json          Output raw JSON (for CI/CD integration)
+  $ kk review main --comment       Review and post comments to PR (CI/CD)
 
 Common Options:
   --dry-run                        Show payload without sending to API
   --json                           Output raw API response as JSON
+  --comment                        Post review results as PR comments
 
 Configuration:
   $ kk config --key YOUR_KEY
   $ kk config --endpoint https://api.korekt.ai/api/review
-
-CI/CD Integration:
-  $ kk get-script github           Output GitHub Actions integration script
-  $ kk get-script bitbucket        Output Bitbucket Pipelines integration script
-  $ kk get-script azure            Output Azure DevOps integration script
 `
   );
 
@@ -122,6 +186,7 @@ program
     'Ignore files matching these patterns (e.g., "*.lock" "dist/*")'
   )
   .option('--json', 'Output raw API response as JSON')
+  .option('--comment', 'Post review results as PR comments (auto-detects CI provider)')
   .action(async (targetBranch, options) => {
     const reviewTarget = targetBranch ? `against '${targetBranch}'` : '(auto-detecting fork point)';
 
@@ -166,8 +231,8 @@ program
       return;
     }
 
-    // Show summary and ask for confirmation (auto-confirm in JSON mode)
-    if (!options.json) {
+    // Show summary and ask for confirmation (auto-confirm in JSON/comment mode)
+    if (!options.json && !options.comment) {
       log(chalk.yellow('\n📋 Ready to submit for review:\n'));
       log(`  Branch: ${chalk.cyan(payload.source_branch)}`);
       log(`  Commits: ${chalk.cyan(payload.commit_messages.length)}`);
@@ -215,6 +280,32 @@ program
       clearInterval(timer);
       const elapsed = Math.floor((Date.now() - startTime) / 1000);
       spinner.succeed(`Review completed in ${elapsed}s!`);
+
+      // Handle --comment flag: post results to PR
+      if (options.comment) {
+        const provider = detectCIProvider();
+        if (!provider) {
+          log(
+            chalk.red(
+              'Could not detect CI provider. Make sure required environment variables are set:'
+            )
+          );
+          log(chalk.gray('  GitHub: GITHUB_TOKEN, GITHUB_REPOSITORY, PR_NUMBER, COMMIT_HASH'));
+          log(chalk.gray('  Azure: SYSTEM_ACCESSTOKEN, SYSTEM_PULLREQUEST_PULLREQUESTID'));
+          log(chalk.gray('  Bitbucket: BITBUCKET_REPO_SLUG, BITBUCKET_PR_ID'));
+          process.exit(1);
+        }
+
+        log(chalk.blue(`Posting review comments to ${provider}...`));
+        try {
+          await runCIScript(provider, response.data);
+          log(chalk.green('Successfully posted review comments!'));
+        } catch (err) {
+          log(chalk.red(`Failed to post comments: ${err.message}`));
+          process.exit(1);
+        }
+        return;
+      }
 
       // Output results to stdout
       if (options.json) {
@@ -421,49 +512,6 @@ program
       console.log('  kk config --key YOUR_API_KEY');
       console.log('  kk config --endpoint https://api.korekt.ai/api/review');
       console.log('  kk config --show              (view current configuration)');
-    }
-  });
-
-program
-  .command('get-script <provider>')
-  .description('Output a CI/CD integration script for a specific provider')
-  .addHelpText(
-    'after',
-    `
-Providers:
-  github      GitHub Actions integration script
-  bitbucket   Bitbucket Pipelines integration script
-  azure       Azure DevOps integration script
-
-Usage:
-  kk get-script github | bash -s results.json
-  kk get-script bitbucket > bitbucket.sh && chmod +x bitbucket.sh
-  kk get-script azure > azure.sh
-`
-  )
-  .action((provider) => {
-    const validProviders = ['github', 'bitbucket', 'azure'];
-
-    if (!validProviders.includes(provider.toLowerCase())) {
-      console.error(chalk.red(`Invalid provider: ${provider}`));
-      console.error(chalk.gray(`Valid providers: ${validProviders.join(', ')}`));
-      process.exit(1);
-    }
-
-    try {
-      // Get the directory where this script is located
-      const __filename = fileURLToPath(import.meta.url);
-      const __dirname = dirname(__filename);
-
-      // Build path to the script file
-      const scriptPath = join(__dirname, '..', 'scripts', `${provider.toLowerCase()}.sh`);
-
-      // Read and output the script
-      const scriptContent = readFileSync(scriptPath, 'utf8');
-      output(scriptContent);
-    } catch (error) {
-      console.error(chalk.red(`Failed to read script: ${error.message}`));
-      process.exit(1);
     }
   });
 

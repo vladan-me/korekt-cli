@@ -30,30 +30,11 @@ jobs:
       - name: Install korekt-cli
         run: npm install -g korekt-cli
 
-      - name: Configure korekt
+      - name: Run AI Code Review
         env:
           KOREKT_API_KEY: ${{ secrets.KOREKT_API_KEY }}
-        run: kk config --key "$KOREKT_API_KEY"
-
-      - name: Run AI Code Review
-        run: kk review origin/${{ github.base_ref }} --json > results.json
-
-      - name: Post PR Comment
-        if: success()
-        env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REPOSITORY: ${{ github.repository }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
           COMMIT_HASH: ${{ github.event.pull_request.head.sha }}
-        run: |
-          kk get-script github | bash -s results.json
-
-      # Optional: Fail if critical issues found
-      # - name: Check for Critical Issues
-      #   if: always()
-      #   run: |
-      #     CRITICAL=$(jq -r '.data.summary.critical // 0' results.json)
-      #     if [ "$CRITICAL" -gt "0" ]; then
-      #       echo "::error::Found $CRITICAL critical issue(s)"
-      #       exit 1
-      #     fi
+        run: kk review origin/${{ github.base_ref }} --comment

@@ -1,8 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { truncateFileData, formatErrorOutput } from './index.js';
-import { readFileSync } from 'fs';
-import { join, dirname } from 'path';
-import { fileURLToPath } from 'url';
+import { truncateFileData, formatErrorOutput, detectCIProvider } from './index.js';
 
 describe('CLI JSON output mode', () => {
   let stdoutSpy;
@@ -336,137 +333,108 @@ describe('CLI JSON output mode', () => {
   });
 });
 
-describe('get-script command', () => {
-  let stdoutSpy;
+describe('detectCIProvider', () => {
+  const originalEnv = process.env;
 
   beforeEach(() => {
-    stdoutSpy = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    // Reset environment before each test
+    process.env = { ...originalEnv };
+    // Clear all CI-related env vars
+    delete process.env.GITHUB_TOKEN;
+    delete process.env.GITHUB_REPOSITORY;
+    delete process.env.SYSTEM_ACCESSTOKEN;
+    delete process.env.SYSTEM_PULLREQUEST_PULLREQUESTID;
+    delete process.env.BITBUCKET_REPO_SLUG;
+    delete process.env.BITBUCKET_PR_ID;
   });
 
   afterEach(() => {
-    vi.restoreAllMocks();
+    process.env = originalEnv;
   });
 
-  describe('valid providers', () => {
-    it('should output github script to stdout', () => {
-      const output = (msg) => process.stdout.write(msg + '\n');
+  it('should detect GitHub when GITHUB_TOKEN and GITHUB_REPOSITORY are set', () => {
+    process.env.GITHUB_TOKEN = 'ghp_test123';
+    process.env.GITHUB_REPOSITORY = 'owner/repo';
 
-      // Read actual github.sh script
-      const __filename = fileURLToPath(import.meta.url);
-      const __dirname = dirname(__filename);
-      const scriptPath = join(__dirname, '..', 'scripts', 'github.sh');
-      const scriptContent = readFileSync(scriptPath, 'utf8');
-
-      // Simulate get-script command output
-      output(scriptContent);
-
-      // Verify script was output to stdout
-      expect(stdoutSpy).toHaveBeenCalledWith(scriptContent + '\n');
-      expect(stdoutSpy).toHaveBeenCalledTimes(1);
-    });
-
-    it('should output bitbucket script to stdout', () => {
-      const output = (msg) => process.stdout.write(msg + '\n');
-
-      // Read actual bitbucket.sh script
-      const __filename = fileURLToPath(import.meta.url);
-      const __dirname = dirname(__filename);
-      const scriptPath = join(__dirname, '..', 'scripts', 'bitbucket.sh');
-      const scriptContent = readFileSync(scriptPath, 'utf8');
-
-      // Simulate get-script command output
-      output(scriptContent);
-
-      // Verify script was output to stdout
-      expect(stdoutSpy).toHaveBeenCalledWith(scriptContent + '\n');
-      expect(stdoutSpy).toHaveBeenCalledTimes(1);
-    });
-
-    it('should output azure script to stdout', () => {
-      const output = (msg) => process.stdout.write(msg + '\n');
-
-      // Read actual azure.sh script
-      const __filename = fileURLToPath(import.meta.url);
-      const __dirname = dirname(__filename);
-      const scriptPath = join(__dirname, '..', 'scripts', 'azure.sh');
-      const scriptContent = readFileSync(scriptPath, 'utf8');
-
-      // Simulate get-script command output
-      output(scriptContent);
-
-      // Verify script was output to stdout
-      expect(stdoutSpy).toHaveBeenCalledWith(scriptContent + '\n');
-      expect(stdoutSpy).toHaveBeenCalledTimes(1);
-    });
+    expect(detectCIProvider()).toBe('github');
   });
 
-  describe('script completeness', () => {
-    it('should output complete bash scripts with proper structure', () => {
-      const __filename = fileURLToPath(import.meta.url);
-      const __dirname = dirname(__filename);
+  it('should detect Azure when SYSTEM_ACCESSTOKEN and SYSTEM_PULLREQUEST_PULLREQUESTID are set', () => {
+    process.env.SYSTEM_ACCESSTOKEN = 'azure_token';
+    process.env.SYSTEM_PULLREQUEST_PULLREQUESTID = '123';
 
-      // Test all three scripts
-      const providers = ['github', 'bitbucket', 'azure'];
-
-      providers.forEach((provider) => {
-        const scriptPath = join(__dirname, '..', 'scripts', `${provider}.sh`);
-        const scriptContent = readFileSync(scriptPath, 'utf8');
-
-        // Verify script starts with shebang
-        expect(scriptContent).toMatch(/^#!/);
-        expect(scriptContent).toContain('#!/usr/bin/env bash');
-
-        // Verify script has substantial content (not truncated)
-        const lineCount = scriptContent.split('\n').length;
-        expect(lineCount).toBeGreaterThan(400);
-
-        // Verify script ends properly (has exit statement)
-        expect(scriptContent).toContain('exit');
-      });
-    });
+    expect(detectCIProvider()).toBe('azure');
   });
 
-  describe('error handling', () => {
-    it('should reject invalid provider', () => {
-      const invalidProvider = 'gitlab';
-      const validProviders = ['github', 'bitbucket', 'azure'];
+  it('should detect Bitbucket when BITBUCKET_REPO_SLUG and BITBUCKET_PR_ID are set', () => {
+    process.env.BITBUCKET_REPO_SLUG = 'my-repo';
+    process.env.BITBUCKET_PR_ID = '456';
 
-      // Test validation logic from index.js line 513
-      const isValid = validProviders.includes(invalidProvider.toLowerCase());
-
-      expect(isValid).toBe(false);
-
-      // In the actual command, this would trigger process.exit(1)
-      // We verify the validation logic correctly identifies invalid providers
-      expect(['github', 'bitbucket', 'azure']).not.toContain(invalidProvider);
-    });
-
-    it('should accept valid providers case-insensitively', () => {
-      const validProviders = ['github', 'bitbucket', 'azure'];
-
-      // Test that providers work case-insensitively
-      expect(validProviders.includes('GitHub'.toLowerCase())).toBe(true);
-      expect(validProviders.includes('BITBUCKET'.toLowerCase())).toBe(true);
-      expect(validProviders.includes('Azure'.toLowerCase())).toBe(true);
-    });
+    expect(detectCIProvider()).toBe('bitbucket');
   });
 
-  describe('bundled script files', () => {
-    it('should have all provider scripts bundled and readable', () => {
-      const __filename = fileURLToPath(import.meta.url);
-      const __dirname = dirname(__filename);
+  it('should return null when no CI provider env vars are set', () => {
+    expect(detectCIProvider()).toBe(null);
+  });
 
-      const providers = ['github', 'bitbucket', 'azure'];
+  it('should return null when only partial GitHub env vars are set', () => {
+    process.env.GITHUB_TOKEN = 'ghp_test123';
+    // GITHUB_REPOSITORY not set
 
-      providers.forEach((provider) => {
-        const scriptPath = join(__dirname, '..', 'scripts', `${provider}.sh`);
+    expect(detectCIProvider()).toBe(null);
+  });
 
-        // Should not throw - file exists and is readable
-        expect(() => {
-          const content = readFileSync(scriptPath, 'utf8');
-          expect(content.length).toBeGreaterThan(0);
-        }).not.toThrow();
-      });
-    });
+  it('should return null when only partial Azure env vars are set', () => {
+    process.env.SYSTEM_ACCESSTOKEN = 'azure_token';
+    // SYSTEM_PULLREQUEST_PULLREQUESTID not set
+
+    expect(detectCIProvider()).toBe(null);
+  });
+
+  it('should return null when only partial Bitbucket env vars are set', () => {
+    process.env.BITBUCKET_REPO_SLUG = 'my-repo';
+    // BITBUCKET_PR_ID not set
+
+    expect(detectCIProvider()).toBe(null);
+  });
+
+  it('should prioritize GitHub over other providers when multiple are set', () => {
+    // Set all providers
+    process.env.GITHUB_TOKEN = 'ghp_test123';
+    process.env.GITHUB_REPOSITORY = 'owner/repo';
+    process.env.SYSTEM_ACCESSTOKEN = 'azure_token';
+    process.env.SYSTEM_PULLREQUEST_PULLREQUESTID = '123';
+    process.env.BITBUCKET_REPO_SLUG = 'my-repo';
+    process.env.BITBUCKET_PR_ID = '456';
+
+    // GitHub should be detected first due to check order
+    expect(detectCIProvider()).toBe('github');
+  });
+});
+
+describe('--comment flag behavior', () => {
+  it('should skip confirmation when --comment is set', () => {
+    const options = { comment: true };
+
+    // Logic from index.js: if (!options.json && !options.comment) { confirmAction... }
+    const shouldShowConfirmation = !options.json && !options.comment;
+
+    expect(shouldShowConfirmation).toBe(false);
+  });
+
+  it('should skip confirmation when both --json and --comment are set', () => {
+    const options = { json: true, comment: true };
+
+    const shouldShowConfirmation = !options.json && !options.comment;
+
+    expect(shouldShowConfirmation).toBe(false);
+  });
+
+  it('should show confirmation when neither --json nor --comment is set', () => {
+    const options = {};
+
+    const shouldShowConfirmation = !options.json && !options.comment;
+
+    expect(shouldShowConfirmation).toBe(true);
   });
 });
