@@ -238,10 +238,12 @@ export async function runUncommittedReview(mode = 'unstaged') {
  */
 export async function getContributors(diffRange, repoRootPath) {
   try {
-    // Get all commit authors with email and name
-    const { stdout: authorOutput } = await execa('git', ['log', '--format=%ae|%an', diffRange], {
-      cwd: repoRootPath,
-    });
+    // Get all commit authors with email and name (exclude merge commits)
+    const { stdout: authorOutput } = await execa(
+      'git',
+      ['log', '--no-merges', '--format=%ae|%an', diffRange],
+      { cwd: repoRootPath }
+    );
 
     if (!authorOutput.trim()) {
       return { author_email: null, author_name: null, contributors: [] };

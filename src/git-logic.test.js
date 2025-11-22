@@ -542,7 +542,7 @@ describe('getContributors', () => {
   it('should extract single contributor with commit count', async () => {
     vi.mocked(execa).mockImplementation(async (cmd, args) => {
       const command = [cmd, ...args].join(' ');
-      if (command.includes('log --format=%ae|%an')) {
+      if (command.includes('log --no-merges --format=%ae|%an')) {
         return {
           stdout: 'john@example.com|John Doe\njohn@example.com|John Doe\njohn@example.com|John Doe',
         };
@@ -565,7 +565,7 @@ describe('getContributors', () => {
   it('should identify author as contributor with most commits', async () => {
     vi.mocked(execa).mockImplementation(async (cmd, args) => {
       const command = [cmd, ...args].join(' ');
-      if (command.includes('log --format=%ae|%an')) {
+      if (command.includes('log --no-merges --format=%ae|%an')) {
         return {
           stdout: [
             'alice@example.com|Alice Smith',
@@ -595,7 +595,7 @@ describe('getContributors', () => {
   it('should handle empty commit range', async () => {
     vi.mocked(execa).mockImplementation(async (cmd, args) => {
       const command = [cmd, ...args].join(' ');
-      if (command.includes('log --format=%ae|%an')) {
+      if (command.includes('log --no-merges --format=%ae|%an')) {
         return { stdout: '' };
       }
       throw new Error(`Unmocked command: ${command}`);
@@ -623,7 +623,7 @@ describe('getContributors', () => {
   it('should handle missing name in git log', async () => {
     vi.mocked(execa).mockImplementation(async (cmd, args) => {
       const command = [cmd, ...args].join(' ');
-      if (command.includes('log --format=%ae|%an')) {
+      if (command.includes('log --no-merges --format=%ae|%an')) {
         return { stdout: 'user@example.com|' };
       }
       throw new Error(`Unmocked command: ${command}`);
@@ -639,7 +639,7 @@ describe('getContributors', () => {
   it('should sort contributors by commit count descending', async () => {
     vi.mocked(execa).mockImplementation(async (cmd, args) => {
       const command = [cmd, ...args].join(' ');
-      if (command.includes('log --format=%ae|%an')) {
+      if (command.includes('log --no-merges --format=%ae|%an')) {
         return {
           stdout: [
             'c@example.com|C User',
