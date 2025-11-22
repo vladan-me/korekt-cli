@@ -90,9 +90,6 @@ kk diff
 # Review all uncommitted changes
 kk all
 
-# Include untracked files
-kk all --untracked
-
 # JSON output works with all review commands
 kk stg --json
 kk diff --json

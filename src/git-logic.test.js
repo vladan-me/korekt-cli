@@ -83,7 +83,7 @@ describe('runUncommittedReview', () => {
       throw new Error(`Unmocked command: ${command}`);
     });
 
-    const result = await runUncommittedReview('staged', null);
+    const result = await runUncommittedReview('staged');
 
     expect(result).toBeDefined();
     expect(result.repo_url).toBe('https://github.com/user/repo'); // Normalized (no .git)
@@ -120,7 +120,7 @@ describe('runUncommittedReview', () => {
       throw new Error(`Unmocked command: ${command}`);
     });
 
-    const result = await runUncommittedReview('unstaged', null);
+    const result = await runUncommittedReview('unstaged');
 
     expect(result).toBeDefined();
     expect(result.source_branch).toBe('feature-branch');
@@ -162,7 +162,7 @@ describe('runUncommittedReview', () => {
       throw new Error(`Unmocked command: ${command}`);
     });
 
-    const result = await runUncommittedReview('all', null);
+    const result = await runUncommittedReview('all');
 
     expect(result).toBeDefined();
     expect(result.changed_files).toHaveLength(2);
@@ -193,7 +193,7 @@ describe('runUncommittedReview', () => {
       throw new Error(`Unmocked command: ${command}`);
     });
 
-    const result = await runUncommittedReview('all', null);
+    const result = await runUncommittedReview('all');
 
     expect(result).toBeNull();
   });

@@ -1,7 +1,5 @@
 import { execa } from 'execa';
 import chalk from 'chalk';
-import fs from 'fs';
-import path from 'path';
 
 /**
  * Truncate content to a maximum number of lines using "head and tail".
@@ -138,10 +136,9 @@ export function parseNameStatus(output) {
 /**
  * Analyze uncommitted changes (staged, unstaged, or all)
  * @param {string} mode - 'staged', 'unstaged', or 'all'
- * @param {boolean} includeUntracked - Whether to include untracked files
  * @returns {Object|null} - The payload object ready for API submission, or null on error
  */
-export async function runUncommittedReview(mode = 'all', includeUntracked = false) {
+export async function runUncommittedReview(mode = 'all') {
   try {
     // 1. Get Repo URL, current branch name, and repository root
     const { stdout: repoUrl } = await execa('git', ['remote', 'get-url', 'origin']);
@@ -177,35 +174,7 @@ export async function runUncommittedReview(mode = 'all', includeUntracked = fals
     const fileList = parseNameStatus(nameStatusOutput);
     const changedFiles = [];
 
-    // Handle untracked files if requested
-    if (includeUntracked) {
-      console.error(chalk.gray('Analyzing untracked files...'));
-      const untrackedFilesOutput = await git('ls-files', '--others', '--exclude-standard');
-      const untrackedFiles = untrackedFilesOutput.split('\n').filter(Boolean);
-
-      for (const file of untrackedFiles) {
-        const fullPath = path.join(repoRootPath, file);
-        const content = fs.readFileSync(fullPath, 'utf-8');
-        const diff = content
-          .split('\n')
-          .map((line) => `+${line}`)
-          .join('\n');
-        changedFiles.push({
-          path: file,
-          status: 'A', // Untracked files are always additions
-          diff: diff,
-          content: '', // No old content
-        });
-        // Add to fileList to prevent duplication if it's also in nameStatusOutput (edge case)
-        fileList.push({ status: 'A', path: file, oldPath: file });
-      }
-    }
-
-    // Deduplicate file list before processing diffs
-    const processedPaths = new Set(changedFiles.map((f) => f.path));
-    const uniqueFileList = fileList.filter((file) => !processedPaths.has(file.path));
-
-    for (const file of uniqueFileList) {
+    for (const file of fileList) {
       const { status, path, oldPath } = file;
 
       // Get diff for this file

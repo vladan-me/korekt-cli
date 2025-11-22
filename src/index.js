@@ -262,7 +262,6 @@ program
   .alias('diff')
   .description('Review unstaged changes (git diff)')
   .option('--dry-run', 'Show payload without sending to API')
-  .option('--untracked', 'Include untracked files in the review')
   .option('--json', 'Output raw API response as JSON')
   .action(async (options) => {
     log(chalk.blue.bold('🚀 Reviewing unstaged changes...'));
@@ -274,7 +273,6 @@ program
   .alias('all')
   .description('Review all uncommitted changes (staged + unstaged)')
   .option('--dry-run', 'Show payload without sending to API')
-  .option('--untracked', 'Include untracked files in the review')
   .option('--json', 'Output raw API response as JSON')
   .action(async (options) => {
     log(chalk.blue.bold('🚀 Reviewing all uncommitted changes...'));
@@ -297,7 +295,7 @@ async function reviewUncommitted(mode, options) {
   }
 
   const { runUncommittedReview } = await import('./git-logic.js');
-  const payload = await runUncommittedReview(mode, options.untracked);
+  const payload = await runUncommittedReview(mode);
 
   if (!payload) {
     log(chalk.red('No changes found or error occurred during analysis.'));
