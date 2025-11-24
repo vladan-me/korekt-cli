@@ -14,7 +14,6 @@ definitions:
           - node
         script:
           - npm install -g korekt-cli
-          - git fetch origin "$BITBUCKET_PR_DESTINATION_BRANCH"
           - kk review "origin/$BITBUCKET_PR_DESTINATION_BRANCH" --comment
 
 pipelines:
