@@ -99,6 +99,30 @@ export function shouldIgnoreFile(filePath, patterns) {
 }
 
 /**
+ * Calculate total changed lines (additions + deletions) from changed files
+ * @param {Array} changedFiles - Array of file objects with diff property
+ * @returns {number} - Total number of changed lines
+ */
+export function calculateChangedLines(changedFiles) {
+  let changedLines = 0;
+  for (const file of changedFiles) {
+    if (file.diff) {
+      const lines = file.diff.split('\n');
+      for (const line of lines) {
+        if (
+          (line.startsWith('+') || line.startsWith('-')) &&
+          !line.startsWith('+++') &&
+          !line.startsWith('---')
+        ) {
+          changedLines++;
+        }
+      }
+    }
+  }
+  return changedLines;
+}
+
+/**
  * Helper function to parse the complex output of git diff --name-status
  */
 export function parseNameStatus(output) {
@@ -219,6 +243,7 @@ export async function runUncommittedReview(mode = 'unstaged') {
       commit_messages: [], // No commits for uncommitted changes
       changed_files: changedFiles,
       source_branch: branchName,
+      changed_lines: calculateChangedLines(changedFiles),
     };
   } catch (error) {
     console.error(chalk.red('Failed to analyze uncommitted changes:'), error.message);
@@ -498,6 +523,7 @@ export async function runLocalReview(targetBranch = null, ignorePatterns = null)
       author_email,
       author_name,
       contributors,
+      changed_lines: calculateChangedLines(changedFiles),
     };
   } catch (error) {
     console.error(chalk.red('Failed to run local review analysis:'), error.message);

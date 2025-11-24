@@ -667,3 +667,166 @@ describe('getContributors', () => {
     expect(result.contributors[2].commits).toBe(1);
   });
 });
+
+describe('changed_lines calculation', () => {
+  beforeEach(() => {
+    vi.mock('execa');
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('should calculate changed_lines for uncommitted changes', async () => {
+    vi.mocked(execa).mockImplementation(async (cmd, args) => {
+      const command = [cmd, ...args].join(' ');
+
+      if (command.includes('remote get-url origin')) {
+        return { stdout: 'https://github.com/user/repo.git' };
+      }
+      if (command.includes('rev-parse --abbrev-ref HEAD')) {
+        return { stdout: 'feature-branch' };
+      }
+      if (command.includes('rev-parse --show-toplevel')) {
+        return { stdout: '/fake/repo/path' };
+      }
+      if (command.includes('diff --cached --name-status')) {
+        return { stdout: 'M\tfile.js' };
+      }
+      if (command.includes('diff --cached -U15 -- file.js')) {
+        // Simulate a diff with 5 additions and 3 deletions (8 total changed lines)
+        return {
+          stdout:
+            'diff --git a/file.js b/file.js\n' +
+            '--- a/file.js\n' +
+            '+++ b/file.js\n' +
+            '@@ -1,5 +1,10 @@\n' +
+            '+new line 1\n' +
+            '+new line 2\n' +
+            ' existing line\n' +
+            '-old line 1\n' +
+            '-old line 2\n' +
+            '-old line 3\n' +
+            '+new line 3\n' +
+            '+new line 4\n' +
+            '+new line 5\n',
+        };
+      }
+      if (command.includes('show HEAD:file.js')) {
+        return { stdout: 'old content' };
+      }
+
+      throw new Error(`Unmocked command: ${command}`);
+    });
+
+    const result = await runUncommittedReview('staged');
+
+    expect(result).toBeDefined();
+    expect(result.changed_lines).toBe(8); // 5 additions + 3 deletions
+  });
+
+  it('should calculate changed_lines for local review', async () => {
+    vi.mocked(execa).mockImplementation(async (cmd, args) => {
+      const command = [cmd, ...args].join(' ');
+
+      if (command.includes('remote get-url origin')) {
+        return { stdout: 'https://github.com/user/repo.git' };
+      }
+      if (command.includes('rev-parse --abbrev-ref HEAD')) {
+        return { stdout: 'feature-branch' };
+      }
+      if (command.includes('rev-parse --show-toplevel')) {
+        return { stdout: '/path/to/repo' };
+      }
+      if (command.includes('rev-parse --verify main')) {
+        return { stdout: 'commit-hash' };
+      }
+      if (command === 'git fetch origin main') {
+        return { stdout: '' };
+      }
+      if (command.includes('merge-base origin/main HEAD')) {
+        return { stdout: 'abc123' };
+      }
+      if (command.includes('log --no-merges --pretty=%B---EOC---')) {
+        return { stdout: 'feat: add feature---EOC---' };
+      }
+      if (command.includes('diff --name-status')) {
+        return { stdout: 'M\tfile1.js\nA\tfile2.js' };
+      }
+      if (command.includes('diff -U15') && command.includes('file1.js')) {
+        // 10 lines changed in file1.js
+        return {
+          stdout:
+            'diff --git a/file1.js b/file1.js\n' +
+            '+line1\n' +
+            '+line2\n' +
+            '-line3\n' +
+            '-line4\n' +
+            '+line5\n' +
+            '+line6\n' +
+            '+line7\n' +
+            '-line8\n' +
+            '+line9\n' +
+            '+line10\n',
+        };
+      }
+      if (command.includes('diff -U15') && command.includes('file2.js')) {
+        // 5 lines added in file2.js (new file)
+        return {
+          stdout:
+            'diff --git a/file2.js b/file2.js\n' +
+            '+line1\n' +
+            '+line2\n' +
+            '+line3\n' +
+            '+line4\n' +
+            '+line5\n',
+        };
+      }
+      if (command.includes('show abc123:file1.js')) {
+        return { stdout: 'original content' };
+      }
+
+      return { stdout: '' };
+    });
+
+    const result = await runLocalReview('main');
+
+    expect(result).toBeDefined();
+    expect(result.changed_lines).toBe(15); // 10 from file1.js + 5 from file2.js
+  });
+
+  it('should handle diffs with no changes', async () => {
+    vi.mocked(execa).mockImplementation(async (cmd, args) => {
+      const command = [cmd, ...args].join(' ');
+
+      if (command.includes('remote get-url origin')) {
+        return { stdout: 'https://github.com/user/repo.git' };
+      }
+      if (command.includes('rev-parse --abbrev-ref HEAD')) {
+        return { stdout: 'feature-branch' };
+      }
+      if (command.includes('rev-parse --show-toplevel')) {
+        return { stdout: '/fake/repo/path' };
+      }
+      if (command.includes('diff --cached --name-status')) {
+        return { stdout: 'M\tfile.js' };
+      }
+      if (command.includes('diff --cached -U15 -- file.js')) {
+        // Empty diff (no actual changes, just headers)
+        return {
+          stdout: 'diff --git a/file.js b/file.js\n--- a/file.js\n+++ b/file.js\n',
+        };
+      }
+      if (command.includes('show HEAD:file.js')) {
+        return { stdout: 'content' };
+      }
+
+      throw new Error(`Unmocked command: ${command}`);
+    });
+
+    const result = await runUncommittedReview('staged');
+
+    expect(result).toBeDefined();
+    expect(result.changed_lines).toBe(0);
+  });
+});
