@@ -9,6 +9,7 @@ import {
   getContributors,
 } from './git-logic.js';
 import { execa } from 'execa';
+import { detectCIProvider } from './utils.js';
 
 describe('parseNameStatus', () => {
   it('should correctly parse M, A, and D statuses', () => {
@@ -828,5 +829,184 @@ describe('changed_lines calculation', () => {
 
     expect(result).toBeDefined();
     expect(result.changed_lines).toBe(0);
+  });
+});
+
+describe('is_ci flag in payload', () => {
+  beforeEach(() => {
+    vi.mock('execa');
+    vi.mock('./utils.js', () => ({
+      detectCIProvider: vi.fn(),
+    }));
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('should set is_ci to true when detectCIProvider returns a provider', async () => {
+    vi.mocked(detectCIProvider).mockReturnValue('github');
+
+    vi.mocked(execa).mockImplementation(async (cmd, args) => {
+      const command = [cmd, ...args].join(' ');
+
+      if (command.includes('remote get-url origin')) {
+        return { stdout: 'https://github.com/user/repo.git' };
+      }
+      if (command.includes('rev-parse --abbrev-ref HEAD')) {
+        return { stdout: 'feature-branch' };
+      }
+      if (command.includes('rev-parse --show-toplevel')) {
+        return { stdout: '/fake/repo/path' };
+      }
+      if (command.includes('diff --cached --name-status')) {
+        return { stdout: 'M\tfile.js' };
+      }
+      if (command.includes('diff --cached -U15 -- file.js')) {
+        return { stdout: 'diff --git a/file.js b/file.js\n+new line' };
+      }
+      if (command.includes('show HEAD:file.js')) {
+        return { stdout: 'old content' };
+      }
+
+      throw new Error(`Unmocked command: ${command}`);
+    });
+
+    const result = await runUncommittedReview('staged');
+
+    expect(result).toBeDefined();
+    expect(result.is_ci).toBe(true);
+  });
+
+  it('should set is_ci to false when detectCIProvider returns null', async () => {
+    vi.mocked(detectCIProvider).mockReturnValue(null);
+
+    vi.mocked(execa).mockImplementation(async (cmd, args) => {
+      const command = [cmd, ...args].join(' ');
+
+      if (command.includes('remote get-url origin')) {
+        return { stdout: 'https://github.com/user/repo.git' };
+      }
+      if (command.includes('rev-parse --abbrev-ref HEAD')) {
+        return { stdout: 'feature-branch' };
+      }
+      if (command.includes('rev-parse --show-toplevel')) {
+        return { stdout: '/fake/repo/path' };
+      }
+      if (command.includes('diff --cached --name-status')) {
+        return { stdout: 'M\tfile.js' };
+      }
+      if (command.includes('diff --cached -U15 -- file.js')) {
+        return { stdout: 'diff --git a/file.js b/file.js\n+new line' };
+      }
+      if (command.includes('show HEAD:file.js')) {
+        return { stdout: 'old content' };
+      }
+
+      throw new Error(`Unmocked command: ${command}`);
+    });
+
+    const result = await runUncommittedReview('staged');
+
+    expect(result).toBeDefined();
+    expect(result.is_ci).toBe(false);
+  });
+
+  it('should include is_ci in runLocalReview payload', async () => {
+    vi.mocked(detectCIProvider).mockReturnValue('azure');
+
+    vi.mocked(execa).mockImplementation(async (cmd, args) => {
+      const command = [cmd, ...args].join(' ');
+
+      if (command.includes('remote get-url origin')) {
+        return { stdout: 'https://github.com/user/repo.git' };
+      }
+      if (command.includes('rev-parse --abbrev-ref HEAD')) {
+        return { stdout: 'feature-branch' };
+      }
+      if (command.includes('rev-parse --show-toplevel')) {
+        return { stdout: '/path/to/repo' };
+      }
+      if (command.includes('rev-parse --verify main')) {
+        return { stdout: 'commit-hash' };
+      }
+      if (command === 'git fetch origin main') {
+        return { stdout: '' };
+      }
+      if (command.includes('merge-base origin/main HEAD')) {
+        return { stdout: 'abc123' };
+      }
+      if (command.includes('log --no-merges --pretty=%B---EOC---')) {
+        return { stdout: 'feat: add feature---EOC---' };
+      }
+      if (command.includes('log --no-merges --format=%ae|%an')) {
+        return { stdout: 'user@example.com|User Name' };
+      }
+      if (command.includes('diff --name-status')) {
+        return { stdout: 'M\tfile.js' };
+      }
+      if (command.includes('diff -U15')) {
+        return { stdout: 'diff content' };
+      }
+      if (command.includes('show abc123:file.js')) {
+        return { stdout: 'original content' };
+      }
+
+      return { stdout: '' };
+    });
+
+    const result = await runLocalReview('main');
+
+    expect(result).toBeDefined();
+    expect(result.is_ci).toBe(true);
+  });
+
+  it('should set is_ci to false in runLocalReview when not in CI', async () => {
+    vi.mocked(detectCIProvider).mockReturnValue(null);
+
+    vi.mocked(execa).mockImplementation(async (cmd, args) => {
+      const command = [cmd, ...args].join(' ');
+
+      if (command.includes('remote get-url origin')) {
+        return { stdout: 'https://github.com/user/repo.git' };
+      }
+      if (command.includes('rev-parse --abbrev-ref HEAD')) {
+        return { stdout: 'feature-branch' };
+      }
+      if (command.includes('rev-parse --show-toplevel')) {
+        return { stdout: '/path/to/repo' };
+      }
+      if (command.includes('rev-parse --verify main')) {
+        return { stdout: 'commit-hash' };
+      }
+      if (command === 'git fetch origin main') {
+        return { stdout: '' };
+      }
+      if (command.includes('merge-base origin/main HEAD')) {
+        return { stdout: 'abc123' };
+      }
+      if (command.includes('log --no-merges --pretty=%B---EOC---')) {
+        return { stdout: 'feat: add feature---EOC---' };
+      }
+      if (command.includes('log --no-merges --format=%ae|%an')) {
+        return { stdout: 'user@example.com|User Name' };
+      }
+      if (command.includes('diff --name-status')) {
+        return { stdout: 'M\tfile.js' };
+      }
+      if (command.includes('diff -U15')) {
+        return { stdout: 'diff content' };
+      }
+      if (command.includes('show abc123:file.js')) {
+        return { stdout: 'original content' };
+      }
+
+      return { stdout: '' };
+    });
+
+    const result = await runLocalReview('main');
+
+    expect(result).toBeDefined();
+    expect(result.is_ci).toBe(false);
   });
 });
