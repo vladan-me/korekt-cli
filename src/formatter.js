@@ -29,6 +29,8 @@ const CATEGORY_ICONS = {
   documentation: '📝',
   test_coverage: '🧪',
   readability: '📖',
+  architectural: '🏗️',
+  file_structure: '📁',
   default: '⚙️', // Default icon
 };
 
