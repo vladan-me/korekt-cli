@@ -16,6 +16,36 @@ export function detectCIProvider() {
 }
 
 /**
+ * Build PR URL from CI environment variables
+ * @returns {string|null} Full PR URL or null if not in CI PR context
+ */
+export function getPrUrl() {
+  // GitHub Actions
+  if (process.env.GITHUB_REPOSITORY && process.env.PR_NUMBER) {
+    return `https://github.com/${process.env.GITHUB_REPOSITORY}/pull/${process.env.PR_NUMBER}`;
+  }
+  // Bitbucket Pipelines
+  if (
+    process.env.BITBUCKET_WORKSPACE &&
+    process.env.BITBUCKET_REPO_SLUG &&
+    process.env.BITBUCKET_PR_ID
+  ) {
+    return `https://bitbucket.org/${process.env.BITBUCKET_WORKSPACE}/${process.env.BITBUCKET_REPO_SLUG}/pull-requests/${process.env.BITBUCKET_PR_ID}`;
+  }
+  // Azure DevOps Pipelines
+  if (
+    process.env.SYSTEM_COLLECTIONURI &&
+    process.env.SYSTEM_TEAMPROJECT &&
+    process.env.BUILD_REPOSITORY_NAME &&
+    process.env.SYSTEM_PULLREQUEST_PULLREQUESTID
+  ) {
+    const collectionUri = process.env.SYSTEM_COLLECTIONURI.replace(/\/$/, '');
+    return `${collectionUri}/${encodeURIComponent(process.env.SYSTEM_TEAMPROJECT)}/_git/${encodeURIComponent(process.env.BUILD_REPOSITORY_NAME)}/pullrequest/${process.env.SYSTEM_PULLREQUEST_PULLREQUESTID}`;
+  }
+  return null;
+}
+
+/**
  * Truncates file data (diff and content) for display purposes
  * @param {Object} file - File object with path, status, diff, content, etc.
  * @param {number} maxLength - Maximum length before truncation (default: 500)

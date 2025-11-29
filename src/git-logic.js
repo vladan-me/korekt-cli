@@ -1,6 +1,6 @@
 import { execa } from 'execa';
 import chalk from 'chalk';
-import { detectCIProvider } from './utils.js';
+import { detectCIProvider, getPrUrl } from './utils.js';
 
 /**
  * Truncate content to a maximum number of lines using "head and tail".
@@ -246,6 +246,7 @@ export async function runUncommittedReview(mode = 'unstaged') {
       source_branch: branchName,
       changed_lines: calculateChangedLines(changedFiles),
       is_ci: detectCIProvider() !== null,
+      pr_url: null, // Uncommitted changes are never part of a PR
     };
   } catch (error) {
     console.error(chalk.red('Failed to analyze uncommitted changes:'), error.message);
@@ -527,6 +528,7 @@ export async function runLocalReview(targetBranch = null, ignorePatterns = null)
       contributors,
       changed_lines: calculateChangedLines(changedFiles),
       is_ci: detectCIProvider() !== null,
+      pr_url: getPrUrl(),
     };
   } catch (error) {
     console.error(chalk.red('Failed to run local review analysis:'), error.message);

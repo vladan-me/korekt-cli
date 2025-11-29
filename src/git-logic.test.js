@@ -837,6 +837,7 @@ describe('is_ci flag in payload', () => {
     vi.mock('execa');
     vi.mock('./utils.js', () => ({
       detectCIProvider: vi.fn(),
+      getPrUrl: vi.fn().mockReturnValue(null),
     }));
   });
 

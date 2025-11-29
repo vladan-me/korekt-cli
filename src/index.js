@@ -17,7 +17,7 @@ import { formatReviewOutput } from './formatter.js';
 import { detectCIProvider, truncateFileData, formatErrorOutput } from './utils.js';
 
 // Re-export utilities for backward compatibility
-export { detectCIProvider, truncateFileData, formatErrorOutput } from './utils.js';
+export { detectCIProvider, truncateFileData, formatErrorOutput, getPrUrl } from './utils.js';
 
 const require = createRequire(import.meta.url);
 const { version } = require('../package.json');

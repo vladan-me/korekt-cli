@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { truncateFileData, formatErrorOutput, detectCIProvider } from './index.js';
+import { truncateFileData, formatErrorOutput, detectCIProvider, getPrUrl } from './index.js';
 
 describe('CLI JSON output mode', () => {
   let stdoutSpy;
@@ -436,5 +436,113 @@ describe('--comment flag behavior', () => {
     const shouldShowConfirmation = !options.json && !options.comment;
 
     expect(shouldShowConfirmation).toBe(true);
+  });
+});
+
+describe('getPrUrl', () => {
+  const originalEnv = process.env;
+
+  beforeEach(() => {
+    // Reset environment before each test
+    process.env = { ...originalEnv };
+    // Clear all PR-related env vars
+    delete process.env.GITHUB_REPOSITORY;
+    delete process.env.PR_NUMBER;
+    delete process.env.BITBUCKET_WORKSPACE;
+    delete process.env.BITBUCKET_REPO_SLUG;
+    delete process.env.BITBUCKET_PR_ID;
+    delete process.env.SYSTEM_COLLECTIONURI;
+    delete process.env.SYSTEM_TEAMPROJECT;
+    delete process.env.BUILD_REPOSITORY_NAME;
+    delete process.env.SYSTEM_PULLREQUEST_PULLREQUESTID;
+  });
+
+  afterEach(() => {
+    process.env = originalEnv;
+  });
+
+  it('should return GitHub PR URL when GitHub env vars are set', () => {
+    process.env.GITHUB_REPOSITORY = 'owner/repo';
+    process.env.PR_NUMBER = '123';
+
+    expect(getPrUrl()).toBe('https://github.com/owner/repo/pull/123');
+  });
+
+  it('should return Bitbucket PR URL when Bitbucket env vars are set', () => {
+    process.env.BITBUCKET_WORKSPACE = 'myworkspace';
+    process.env.BITBUCKET_REPO_SLUG = 'myrepo';
+    process.env.BITBUCKET_PR_ID = '456';
+
+    expect(getPrUrl()).toBe('https://bitbucket.org/myworkspace/myrepo/pull-requests/456');
+  });
+
+  it('should return Azure DevOps PR URL when Azure env vars are set', () => {
+    process.env.SYSTEM_COLLECTIONURI = 'https://dev.azure.com/myorg/';
+    process.env.SYSTEM_TEAMPROJECT = 'myproject';
+    process.env.BUILD_REPOSITORY_NAME = 'myrepo';
+    process.env.SYSTEM_PULLREQUEST_PULLREQUESTID = '789';
+
+    expect(getPrUrl()).toBe('https://dev.azure.com/myorg/myproject/_git/myrepo/pullrequest/789');
+  });
+
+  it('should strip trailing slash from Azure DevOps collection URI', () => {
+    process.env.SYSTEM_COLLECTIONURI = 'https://dev.azure.com/myorg/';
+    process.env.SYSTEM_TEAMPROJECT = 'myproject';
+    process.env.BUILD_REPOSITORY_NAME = 'myrepo';
+    process.env.SYSTEM_PULLREQUEST_PULLREQUESTID = '789';
+
+    const url = getPrUrl();
+    expect(url).not.toContain('myorg//myproject');
+    expect(url).toContain('myorg/myproject');
+  });
+
+  it('should URL-encode spaces in Azure DevOps project and repo names', () => {
+    process.env.SYSTEM_COLLECTIONURI = 'https://dev.azure.com/myorg/';
+    process.env.SYSTEM_TEAMPROJECT = 'My Project';
+    process.env.BUILD_REPOSITORY_NAME = 'My Repo';
+    process.env.SYSTEM_PULLREQUEST_PULLREQUESTID = '789';
+
+    expect(getPrUrl()).toBe(
+      'https://dev.azure.com/myorg/My%20Project/_git/My%20Repo/pullrequest/789'
+    );
+  });
+
+  it('should return null when no PR env vars are set', () => {
+    expect(getPrUrl()).toBe(null);
+  });
+
+  it('should return null when only partial GitHub env vars are set', () => {
+    process.env.GITHUB_REPOSITORY = 'owner/repo';
+    // PR_NUMBER not set
+
+    expect(getPrUrl()).toBe(null);
+  });
+
+  it('should return null when only partial Bitbucket env vars are set', () => {
+    process.env.BITBUCKET_WORKSPACE = 'myworkspace';
+    process.env.BITBUCKET_REPO_SLUG = 'myrepo';
+    // BITBUCKET_PR_ID not set
+
+    expect(getPrUrl()).toBe(null);
+  });
+
+  it('should return null when only partial Azure env vars are set', () => {
+    process.env.SYSTEM_COLLECTIONURI = 'https://dev.azure.com/myorg/';
+    process.env.SYSTEM_TEAMPROJECT = 'myproject';
+    // BUILD_REPOSITORY_NAME and SYSTEM_PULLREQUEST_PULLREQUESTID not set
+
+    expect(getPrUrl()).toBe(null);
+  });
+
+  it('should prioritize GitHub over other providers when multiple are set', () => {
+    // Set all providers
+    process.env.GITHUB_REPOSITORY = 'owner/repo';
+    process.env.PR_NUMBER = '123';
+    process.env.BITBUCKET_WORKSPACE = 'myworkspace';
+    process.env.BITBUCKET_REPO_SLUG = 'myrepo';
+    process.env.BITBUCKET_PR_ID = '456';
+
+    // GitHub should be detected first due to check order
+    expect(getPrUrl()).toBe('https://github.com/owner/repo/pull/123');
   });
 });
