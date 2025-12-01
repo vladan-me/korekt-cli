@@ -14,7 +14,7 @@ steps:
   - script: |
       npm install -g korekt-cli
       TARGET_BRANCH=$(echo "$(System.PullRequest.TargetBranch)" | sed 's|refs/heads/||')
-      kk review "origin/$TARGET_BRANCH" --comment
+      kk review "origin/$TARGET_BRANCH" --comment --post-ticket
     env:
       KOREKT_API_KEY: $(KOREKT_API_KEY)
       SYSTEM_ACCESSTOKEN: $(System.AccessToken)

@@ -102,27 +102,31 @@ delete_old_summary_comments() {
   fi
 
   # Find threads that contain the bot marker and have no threadContext (summary comments)
-  echo "$existing_threads" | jq -r '.[] | select(.comments[0].content | contains("🤖 **Automated Code Review Results**")) | select(.threadContext == null) | .id' | while IFS= read -r thread_id; do
-    if [ -z "$thread_id" ] || [ "$thread_id" = "null" ]; then
+  echo "$existing_threads" | jq -r '.[] | select((.comments[0].content? // "") | contains("🤖 **Automated Code Review Results**")) | select(.threadContext == null) | {id: .id, comment_id: .comments[0].id} | @json' | while IFS= read -r thread_json; do
+    local thread_id
+    local comment_id
+    thread_id=$(echo "$thread_json" | jq -r '.id')
+    comment_id=$(echo "$thread_json" | jq -r '.comment_id')
+
+    if [ -z "$thread_id" ] || [ "$thread_id" = "null" ] || [ -z "$comment_id" ] || [ "$comment_id" = "null" ]; then
       continue
     fi
 
-    echo "Deleting old summary thread (ID: $thread_id)..."
+    echo "Deleting old summary comment (thread ID: $thread_id, comment ID: $comment_id)..."
 
     local delete_response
-    delete_response=$(curl -s -X PATCH "${BASE_API_URL}/threads/${thread_id}?api-version=6.0" \
+    delete_response=$(curl -s -X DELETE "${BASE_API_URL}/threads/${thread_id}/comments/${comment_id}?api-version=7.1" \
       -H "Authorization: Bearer $SYSTEM_ACCESSTOKEN" \
       -H "Content-Type: application/json" \
-      --data '{"status": "closed"}' \
       -w "\n%{http_code}")
 
     local http_status
     http_status=$(echo "$delete_response" | tail -n1)
 
     if [ "$http_status" -ge 200 ] && [ "$http_status" -lt 300 ]; then
-      echo "Successfully closed thread $thread_id"
+      echo "Successfully deleted comment in thread $thread_id"
     else
-      echo "Warning: Could not close thread $thread_id (HTTP $http_status)"
+      echo "Warning: Could not delete comment in thread $thread_id (HTTP $http_status)"
     fi
   done
 }
@@ -189,6 +193,7 @@ post_review_thread() {
     '{
       comments: [
         {
+          parentCommentId: 0,
           content: $content,
           commentType: 1
         }
@@ -208,7 +213,7 @@ post_review_thread() {
     }')
 
   local post_response
-  post_response=$(curl -s -X POST "${BASE_API_URL}/threads?api-version=6.0" \
+  post_response=$(curl -s -X POST "${BASE_API_URL}/threads?api-version=7.1" \
     -H "Authorization: Bearer $SYSTEM_ACCESSTOKEN" \
     -H "Content-Type: application/json" \
     --data "$thread_payload" -w "\n%{http_code}")
@@ -438,6 +443,7 @@ SUMMARY_PAYLOAD=$(jq -n \
   '{
     comments: [
       {
+        parentCommentId: 0,
         content: $content,
         commentType: 1
       }
@@ -445,7 +451,7 @@ SUMMARY_PAYLOAD=$(jq -n \
     status: 1
   }')
 
-POST_RESPONSE=$(curl -s -X POST "${BASE_API_URL}/threads?api-version=6.0" \
+POST_RESPONSE=$(curl -s -X POST "${BASE_API_URL}/threads?api-version=7.1" \
   -H "Authorization: Bearer $SYSTEM_ACCESSTOKEN" \
   -H "Content-Type: application/json" \
   --data "$SUMMARY_PAYLOAD" -w "\n%{http_code}")
@@ -483,7 +489,7 @@ STATUS_PAYLOAD=$(jq -n \
     }
   }')
 
-STATUS_RESPONSE=$(curl -s -X POST "${BASE_API_URL}/statuses?api-version=6.0" \
+STATUS_RESPONSE=$(curl -s -X POST "${BASE_API_URL}/statuses?api-version=7.1" \
   -H "Authorization: Bearer $SYSTEM_ACCESSTOKEN" \
   -H "Content-Type: application/json" \
   --data "$STATUS_PAYLOAD" -w "\n%{http_code}")
