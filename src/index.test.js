@@ -451,7 +451,7 @@ describe('getPrUrl', () => {
     delete process.env.BITBUCKET_WORKSPACE;
     delete process.env.BITBUCKET_REPO_SLUG;
     delete process.env.BITBUCKET_PR_ID;
-    delete process.env.SYSTEM_COLLECTIONURI;
+    delete process.env.SYSTEM_TEAMFOUNDATIONCOLLECTIONURI;
     delete process.env.SYSTEM_TEAMPROJECT;
     delete process.env.BUILD_REPOSITORY_NAME;
     delete process.env.SYSTEM_PULLREQUEST_PULLREQUESTID;
@@ -477,7 +477,7 @@ describe('getPrUrl', () => {
   });
 
   it('should return Azure DevOps PR URL when Azure env vars are set', () => {
-    process.env.SYSTEM_COLLECTIONURI = 'https://dev.azure.com/myorg/';
+    process.env.SYSTEM_TEAMFOUNDATIONCOLLECTIONURI = 'https://dev.azure.com/myorg/';
     process.env.SYSTEM_TEAMPROJECT = 'myproject';
     process.env.BUILD_REPOSITORY_NAME = 'myrepo';
     process.env.SYSTEM_PULLREQUEST_PULLREQUESTID = '789';
@@ -486,7 +486,7 @@ describe('getPrUrl', () => {
   });
 
   it('should strip trailing slash from Azure DevOps collection URI', () => {
-    process.env.SYSTEM_COLLECTIONURI = 'https://dev.azure.com/myorg/';
+    process.env.SYSTEM_TEAMFOUNDATIONCOLLECTIONURI = 'https://dev.azure.com/myorg/';
     process.env.SYSTEM_TEAMPROJECT = 'myproject';
     process.env.BUILD_REPOSITORY_NAME = 'myrepo';
     process.env.SYSTEM_PULLREQUEST_PULLREQUESTID = '789';
@@ -497,7 +497,7 @@ describe('getPrUrl', () => {
   });
 
   it('should URL-encode spaces in Azure DevOps project and repo names', () => {
-    process.env.SYSTEM_COLLECTIONURI = 'https://dev.azure.com/myorg/';
+    process.env.SYSTEM_TEAMFOUNDATIONCOLLECTIONURI = 'https://dev.azure.com/myorg/';
     process.env.SYSTEM_TEAMPROJECT = 'My Project';
     process.env.BUILD_REPOSITORY_NAME = 'My Repo';
     process.env.SYSTEM_PULLREQUEST_PULLREQUESTID = '789';
@@ -527,7 +527,7 @@ describe('getPrUrl', () => {
   });
 
   it('should return null when only partial Azure env vars are set', () => {
-    process.env.SYSTEM_COLLECTIONURI = 'https://dev.azure.com/myorg/';
+    process.env.SYSTEM_TEAMFOUNDATIONCOLLECTIONURI = 'https://dev.azure.com/myorg/';
     process.env.SYSTEM_TEAMPROJECT = 'myproject';
     // BUILD_REPOSITORY_NAME and SYSTEM_PULLREQUEST_PULLREQUESTID not set
 

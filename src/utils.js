@@ -34,12 +34,12 @@ export function getPrUrl() {
   }
   // Azure DevOps Pipelines
   if (
-    process.env.SYSTEM_COLLECTIONURI &&
+    process.env.SYSTEM_TEAMFOUNDATIONCOLLECTIONURI &&
     process.env.SYSTEM_TEAMPROJECT &&
     process.env.BUILD_REPOSITORY_NAME &&
     process.env.SYSTEM_PULLREQUEST_PULLREQUESTID
   ) {
-    const collectionUri = process.env.SYSTEM_COLLECTIONURI.replace(/\/$/, '');
+    const collectionUri = process.env.SYSTEM_TEAMFOUNDATIONCOLLECTIONURI.replace(/\/$/, '');
     return `${collectionUri}/${encodeURIComponent(process.env.SYSTEM_TEAMPROJECT)}/_git/${encodeURIComponent(process.env.BUILD_REPOSITORY_NAME)}/pullrequest/${process.env.SYSTEM_PULLREQUEST_PULLREQUESTID}`;
   }
   return null;

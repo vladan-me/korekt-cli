@@ -72,40 +72,20 @@ wrap_code_block() {
   printf "%s\n" "$content" | fold -s -w "$max_width"
 }
 
-# Function to fetch all pages of threads using pagination
-fetch_all_threads() {
+# Function to fetch threads (single request, no pagination)
+fetch_threads() {
   local url="$1"
-  local all_threads="[]"
-  local skip=0
-  local top=100
-  local has_more=true
+  local response
+  response=$(curl -s --max-time 30 -X GET "${url}?api-version=7.1" \
+    -H "Authorization: Bearer $SYSTEM_ACCESSTOKEN" \
+    -H "Content-Type: application/json")
 
-  while [ "$has_more" = true ]; do
-    local response
-    response=$(curl -s -X GET "${url}?\$top=${top}&\$skip=${skip}&api-version=6.0" \
-      -H "Authorization: Bearer $SYSTEM_ACCESSTOKEN" \
-      -H "Content-Type: application/json")
+  if ! echo "$response" | jq -e '.value' > /dev/null 2>&1; then
+    echo "[]"
+    return
+  fi
 
-    if ! echo "$response" | jq -e '.value' > /dev/null 2>&1; then
-      echo "[]"
-      return
-    fi
-
-    local page_threads
-    page_threads=$(echo "$response" | jq '.value')
-
-    local count
-    count=$(echo "$page_threads" | jq 'length')
-
-    if [ "$count" -eq 0 ]; then
-      has_more=false
-    else
-      all_threads=$(jq -s '.[0] + .[1]' <(echo "$all_threads") <(echo "$page_threads"))
-      skip=$((skip + top))
-    fi
-  done
-
-  echo "$all_threads"
+  echo "$response" | jq '.value'
 }
 
 # Function to delete old bot summary comments
@@ -114,7 +94,7 @@ delete_old_summary_comments() {
   local threads_url="${BASE_API_URL}/threads"
   local existing_threads
 
-  existing_threads=$(fetch_all_threads "$threads_url")
+  existing_threads=$(fetch_threads "$threads_url")
 
   if ! echo "$existing_threads" | jq -e . > /dev/null 2>&1; then
     echo "Warning: Could not fetch existing threads to delete old summaries."
@@ -153,7 +133,7 @@ populate_existing_comments_map() {
   local threads_url="${BASE_API_URL}/threads"
   local existing_threads
 
-  existing_threads=$(fetch_all_threads "$threads_url")
+  existing_threads=$(fetch_threads "$threads_url")
 
   if ! echo "$existing_threads" | jq -e . > /dev/null 2>&1; then
     echo "Warning: Could not fetch existing threads. Duplicate checking will be skipped."

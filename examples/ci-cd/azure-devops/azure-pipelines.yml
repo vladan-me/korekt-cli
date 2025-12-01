@@ -1,59 +1,20 @@
 # Required Pipeline Variables (Pipelines → Edit → Variables):
 #   KOREKT_API_KEY - Your Korekt API key (set as secret)
 
-trigger:
-  branches:
-    exclude:
-      - '*'  # Don't trigger on direct pushes
-
-pr:
-  branches:
-    include:
-      - main
-      - master
-      - develop
+trigger: none  # Only run on PRs, not direct pushes
+pr: '*'
 
 pool:
   vmImage: 'ubuntu-latest'
 
-variables:
-  NODE_VERSION: '20.x'
+steps:
+  - checkout: self
+    fetchDepth: 0
 
-stages:
-  - stage: CodeReview
-    displayName: 'AI Code Review'
-    jobs:
-      - job: KorektReview
-        displayName: 'Run Korekt Review'
-        steps:
-          - checkout: self
-            fetchDepth: 0  # Full git history
-            fetchTags: false  # Skip tags for performance
-
-          - task: NodeTool@0
-            displayName: 'Install Node.js'
-            inputs:
-              versionSpec: $(NODE_VERSION)
-
-          - script: npm install -g korekt-cli
-            displayName: 'Install korekt-cli'
-
-          - script: |
-              echo "Target branch: $(System.PullRequest.TargetBranch)"
-              # Remove 'refs/heads/' prefix from branch name
-              TARGET_BRANCH=$(echo "$(System.PullRequest.TargetBranch)" | sed 's|refs/heads/||')
-              echo "Cleaned target branch: $TARGET_BRANCH"
-              # Fetch target branch explicitly
-              git fetch origin "$TARGET_BRANCH"
-              # Run review and post comments
-              kk review "origin/$TARGET_BRANCH" --comment
-            displayName: 'Run AI Code Review'
-            condition: eq(variables['Build.Reason'], 'PullRequest')
-            env:
-              KOREKT_API_KEY: $(KOREKT_API_KEY)
-              SYSTEM_ACCESSTOKEN: $(System.AccessToken)
-              SYSTEM_TEAMFOUNDATIONCOLLECTIONURI: $(System.TeamFoundationCollectionUri)
-              SYSTEM_TEAMPROJECT: $(System.TeamProject)
-              BUILD_REPOSITORY_ID: $(Build.Repository.ID)
-              SYSTEM_PULLREQUEST_PULLREQUESTID: $(System.PullRequest.PullRequestId)
-              BUILD_BUILDID: $(Build.BuildId)
+  - script: |
+      npm install -g korekt-cli
+      TARGET_BRANCH=$(echo "$(System.PullRequest.TargetBranch)" | sed 's|refs/heads/||')
+      kk review "origin/$TARGET_BRANCH" --comment
+    env:
+      KOREKT_API_KEY: $(KOREKT_API_KEY)
+      SYSTEM_ACCESSTOKEN: $(System.AccessToken)
