@@ -398,9 +398,6 @@ if [ -n "${BITBUCKET_BUILD_NUMBER:-}" ]; then
   echo "" >> "$COMMENT_FILE"
 fi
 
-echo "---" >> "$COMMENT_FILE"
-echo "*Powered by [korekt-cli](https://github.com/korekt-ai/korekt-cli)*" >> "$COMMENT_FILE"
-
 # Delete old summaries
 delete_old_summary_comments
 
